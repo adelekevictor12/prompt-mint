@@ -37,9 +37,13 @@ interface AuditLogViewerProps {
 
 const ACTION_LABELS: Record<string, string> = {
   review_removed: "Review Removed",
-  prompt_hidden: "Prompt Hidden",
-  user_warned: "User Warned",
   review_approved: "Review Approved",
+  user_warned: "User Warned",
+  report_resolved: "Report Resolved",
+  report_dismissed: "Report Dismissed",
+  prompt_takedown: "Listing Taken Down",
+  prompt_reinstated: "Listing Reinstated",
+  prompt_hidden: "Prompt Hidden",
   prompt_featured: "Prompt Featured",
 };
 

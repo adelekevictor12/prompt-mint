@@ -10,7 +10,7 @@ import {
   RefreshCw,
   ShoppingBag,
   WifiOff,
-  BookOpenCheck,
+  Send,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -27,6 +27,7 @@ import { formatPriceLabel } from "@/lib/stellar/format";
 import { Skeleton, SkeletonAvatar, SkeletonText } from "@/components/Skeleton";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { BuyerLibraryRowSkeleton } from "@/components/MarketplaceSkeletons";
+import { TransferLicense, type TransferLicenseData } from "@/components/TransferLicense";
 
 const EXPECTED_NETWORK = stellarNetwork;
 
@@ -65,6 +66,7 @@ function PromptLibraryCard({
   unlockState,
   isBusy,
   onUnlock,
+  onTransfer,
 }: {
   prompt: PromptRecord;
   plaintext?: string;
@@ -72,6 +74,7 @@ function PromptLibraryCard({
   unlockState: UnlockState;
   isBusy: boolean;
   onUnlock: () => void;
+  onTransfer: () => void;
 }) {
   const isUnlocked = Boolean(plaintext);
   const showExplainer = unlockState !== "idle" && unlockState !== "success";
@@ -128,8 +131,8 @@ function PromptLibraryCard({
             state={unlockState}
             onRetry={
               unlockState === "rejected" ||
-              unlockState === "expired" ||
-              unlockState === "failed"
+                unlockState === "expired" ||
+                unlockState === "failed"
                 ? onUnlock
                 : undefined
             }
@@ -150,34 +153,44 @@ function PromptLibraryCard({
           </div>
         )}
 
-        {/* Action button */}
-        <Button
-          className="h-9 bg-cyan-200 text-slate-950 hover:bg-cyan-100 disabled:opacity-50 text-xs font-bold"
-          onClick={onUnlock}
-          disabled={
-            isBusy ||
-            unlockState === "signing" ||
-            unlockState === "verifying" ||
-            unlockState === "integrity_failed"
-          }
-        >
-          {isBusy ? (
-            <>
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              Unlocking…
-            </>
-          ) : isUnlocked ? (
-            <>
-              <Eye className="h-3.5 w-3.5" />
-              Re-open prompt
-            </>
-          ) : (
-            <>
-              <LockKeyhole className="h-3.5 w-3.5" />
-              Unlock full prompt
-            </>
-          )}
-        </Button>
+        {/* Action buttons */}
+        <div className="flex gap-2">
+          <Button
+            className="flex-1 h-9 bg-cyan-200 text-slate-950 hover:bg-cyan-100 disabled:opacity-50 text-xs font-bold"
+            onClick={onUnlock}
+            disabled={
+              isBusy ||
+              unlockState === "signing" ||
+              unlockState === "verifying" ||
+              unlockState === "integrity_failed"
+            }
+          >
+            {isBusy ? (
+              <>
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                Unlocking…
+              </>
+            ) : isUnlocked ? (
+              <>
+                <Eye className="h-3.5 w-3.5" />
+                Re-open prompt
+              </>
+            ) : (
+              <>
+                <LockKeyhole className="h-3.5 w-3.5" />
+                Unlock full prompt
+              </>
+            )}
+          </Button>
+          <Button
+            className="flex-shrink-0 h-9 px-4 bg-blue-500 text-white hover:bg-blue-400 disabled:opacity-50 text-xs font-bold"
+            onClick={onTransfer}
+            disabled={isBusy || unlockState === "signing" || unlockState === "verifying"}
+            title="Transfer this license to another address"
+          >
+            <Send className="h-3.5 w-3.5" />
+          </Button>
+        </div>
       </div>
     </article>
   );
@@ -189,6 +202,7 @@ export function BuyerLibrary() {
   const [unlocked, setUnlocked] = useState<Record<string, string>>({});
   const [integrityMap, setIntegrityMap] = useState<Record<string, IntegrityMetadata>>({});
   const [unlockStates, setUnlockStates] = useState<Record<string, UnlockState>>({});
+  const [transferingPromptId, setTransferingPromptId] = useState<string | null>(null);
 
   const isWrongNetwork =
     Boolean(address) &&
@@ -258,6 +272,10 @@ export function BuyerLibrary() {
     }
   };
 
+  const transferingPrompt = transferingPromptId
+    ? prompts.find((p) => p.id.toString() === transferingPromptId)
+    : null;
+
   if (!address)
     return (
       <EmptyState
@@ -324,35 +342,86 @@ export function BuyerLibrary() {
     );
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3 mb-2">
-        <FreshnessBadge
-          timestamp={freshnessTimestamp}
-          isCached={isUsingCache}
-          isOffline={!networkState.isOnline}
-          isDegraded={networkState.isDegraded}
-        />
-        {!networkState.canTrustConfirmation && (
-          <div className="text-xs font-semibold text-rose-300 bg-rose-500/10 border border-rose-500/20 px-3 py-1.5 rounded-lg">
-            Unlock Service Unavailable — Reconnect to verify on-chain license
-          </div>
-        )}
+    <Fragment>
+      <div className="space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-2">
+          <FreshnessBadge
+            timestamp={freshnessTimestamp}
+            isCached={isUsingCache}
+            isOffline={!networkState.isOnline}
+            isDegraded={networkState.isDegraded}
+          />
+          {!networkState.canTrustConfirmation && (
+            <div className="text-xs font-semibold text-rose-300 bg-rose-500/10 border border-rose-500/20 px-3 py-1.5 rounded-lg">
+              Unlock Service Unavailable — Reconnect to verify on-chain license
+            </div>
+          )}
+        </div>
+
+        {prompts.map((prompt) => {
+          const id = prompt.id.toString();
+          return (
+            <PromptLibraryCard
+              key={id}
+              prompt={prompt}
+              plaintext={unlocked[id]}
+              integrity={integrityMap[id]}
+              unlockState={unlockStates[id] ?? "idle"}
+              isBusy={busyId === id}
+              onUnlock={() => void handleUnlock(prompt)}
+              onTransfer={() => setTransferingPromptId(id)}
+            />
+          );
+        })}
       </div>
 
-      {prompts.map((prompt) => {
-        const id = prompt.id.toString();
-        return (
-          <PromptLibraryCard
-            key={id}
-            prompt={prompt}
-            plaintext={unlocked[id]}
-            integrity={integrityMap[id]}
-            unlockState={unlockStates[id] ?? "idle"}
-            isBusy={busyId === id}
-            onUnlock={() => void handleUnlock(prompt)}
-          />
-        );
-      })}
-    </div>
+      {/* Transfer License Modal */}
+      {transferingPrompt && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-[#0a0e13] rounded-xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
+            <TransferLicense
+              prompt={{
+                id: transferingPrompt.id.toString(),
+                title: transferingPrompt.title,
+                priceStroops: transferingPrompt.priceStroops,
+                imageUrl: transferingPrompt.imageUrl,
+                category: transferingPrompt.category,
+                creator: transferingPrompt.creator,
+                previewText: transferingPrompt.previewText,
+              }}
+              onClose={() => setTransferingPromptId(null)}
+              onSuccess={() => {
+                setTransferingPromptId(null);
+                void query.refetch();
+              }}
+            />
+          </div>
+        </div>
+      )}
+    </Fragment>
   );
+}
+                      Unlock Service Unavailable — Reconnect to verify on - chain license
+                    </div >
+                  )}
+                </div >
+
+{
+  prompts.map((prompt) => {
+    const id = prompt.id.toString();
+    return (
+      <PromptLibraryCard
+        key={id}
+        prompt={prompt}
+        plaintext={unlocked[id]}
+        integrity={integrityMap[id]}
+        unlockState={unlockStates[id] ?? "idle"}
+        isBusy={busyId === id}
+        onUnlock={() => void handleUnlock(prompt)}
+      />
+    );
+  })
+}
+              </div >
+              );
 }

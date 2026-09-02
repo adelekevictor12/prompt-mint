@@ -75,7 +75,7 @@ describe("withObservability wrapper security headers", () => {
     await wrappedHandler(mockReq, mockRes);
     expect(mockRes.setHeader).toHaveBeenCalledWith(
       "Content-Security-Policy",
-      "default-src 'none'; frame-ancestors 'none';"
+      "default-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'none'; object-src 'none'"
     );
   });
 

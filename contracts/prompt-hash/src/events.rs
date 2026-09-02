@@ -27,6 +27,12 @@ struct PromptPriceUpdated {
 }
 
 #[contractevent]
+struct PriceBoundsSet {
+    pub min_price: Option<i128>,
+    pub max_price: Option<i128>,
+}
+
+#[contractevent]
 struct PromptPurchased {
     #[topic]
     pub prompt_id: u128,
@@ -189,6 +195,14 @@ impl Events {
             prompt_id,
             previous_price,
             price_stroops,
+        }
+        .publish(env);
+    }
+
+    pub fn emit_price_bounds_set(env: &Env, min_price: Option<i128>, max_price: Option<i128>) {
+        PriceBoundsSet {
+            min_price,
+            max_price,
         }
         .publish(env);
     }

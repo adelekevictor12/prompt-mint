@@ -1,4 +1,4 @@
-import i18n from "../i18n";
+import { classifyContractError } from "./stellar/promptHashClient";
 
 const TX_ERROR_MAP: Record<string, string> = {
   "user rejected": "errors.transaction.user_rejected",
@@ -23,6 +23,22 @@ export function translateError(message: string): string {
     if (lower.includes(key)) {
       return i18n.t(tKey, { defaultValue: FALLBACK_UNKNOWN });
     }
+  }
+
+  // Check if message is a contract revert or error code
+  if (
+    lower.includes("error(contract") ||
+    lower.includes("contracterror") ||
+    lower.includes("alreadypurchased") ||
+    lower.includes("already purchased") ||
+    lower.includes("promptnotfound") ||
+    lower.includes("contractispaused") ||
+    lower.includes("listingexpired") ||
+    lower.includes("invalidprice") ||
+    lower.includes("unauthorized")
+  ) {
+    const details = classifyContractError(message);
+    return details.message;
   }
 
   return i18n.t("errors.transaction.unknown", { defaultValue: FALLBACK_UNKNOWN });

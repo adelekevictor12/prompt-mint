@@ -54,7 +54,7 @@ const promptSchema = new mongoose.Schema(
       default: 1,
       min: 1,
     },
-    // Anti-plagiarism fields (Issue #133)
+    // Anti-plegiarism fields (Issue #133)
     similarityFlag: {
       type: String,
       enum: ["clean", "suspicious", "highly_similar"],
@@ -132,6 +132,10 @@ const promptSchema = new mongoose.Schema(
       default: 1,
       min: 1,
     },
+    contentHash: {
+      type: String,
+      default: null,
+    },
   },
   {
     timestamps: true,
@@ -142,6 +146,25 @@ promptSchema.index({ listingStatus: 1, isActive: 1, createdAt: -1 });
 promptSchema.index({ category: 1, listingStatus: 1, isActive: 1 });
 promptSchema.index({ owner: 1, listingStatus: 1, createdAt: -1 });
 promptSchema.index({ savedPrompts: 1, listingStatus: 1 });
+// Unique index on contentHash to prevent duplicate content
+promptSchema.index({ contentHash: 1 }, { unique: true, sparse: true });
+
+// Full-text search index used by the indexer-backed marketplace search.
+// Covers the off-chain metadata the event indexer keeps in sync so listing
+// discovery stays queryable without replaying contract events on every read.
+promptSchema.index({ title: "text", content: "text", category: "text", tags: "text" });
+
+// Compound indexes that back the sort options for high-volume pagination.
+// Each pairs the sort field with `_id` so keyset (cursor) pagination is
+// deterministic even when the sort key has duplicates.
+promptSchema.index({ createdAt: -1, _id: -1 });
+promptSchema.index({ createdAt: 1, _id: 1 });
+promptSchema.index({ price: 1, _id: 1 });
+promptSchema.index({ price: -1, _id: -1 });
+promptSchema.index({ salesCount: -1, _id: -1 });
+promptSchema.index({ rating: -1, _id: -1 });
+promptSchema.index({ listingStatus: 1, isActive: 1, price: 1, _id: 1 });
+promptSchema.index({ listingStatus: 1, isActive: 1, salesCount: -1, _id: -1 });
 
 // Check if the model exists before creating it
 const Prompt = mongoose.models.Prompt || mongoose.model("Prompt", promptSchema);

@@ -62,6 +62,8 @@ const initialState = {
   networkPassphrase: undefined,
   status: "idle" as WalletStatus,
   error: undefined,
+  autoLockSecondsLeft: null as number | null,
+  extendSession: () => {},
 };
 
 const boundSignTransaction = wallet.signTransaction.bind(wallet);

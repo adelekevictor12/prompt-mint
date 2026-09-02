@@ -26,6 +26,7 @@ vi.mock("@/lib/reviews/reviewClient", () => ({
     getReviews: vi.fn().mockResolvedValue({
       reviews: [],
       stats: { total: 0, averageRating: 0 },
+      pagination: { page: 1, limit: 10, total: 0, totalPages: 0, hasMore: false },
     }),
   },
 }));
@@ -140,7 +141,7 @@ describe("Purchase Button States", () => {
 
     // Mock purchase to fail
     vi.mocked(PromptHashClient.purchasePrompt).mockRejectedValue(
-      new Error("Insufficient XLM balance")
+      new Error("Insufficient funds")
     );
 
     renderWithProviders(
@@ -156,7 +157,7 @@ describe("Purchase Button States", () => {
     await user.click(purchaseButton);
 
     await waitFor(() => {
-      expect(screen.getAllByText(/insufficient xlm balance/i).length).toBeGreaterThan(0);
+      expect(screen.getAllByText(/insufficient funds/i).length).toBeGreaterThan(0);
     });
   });
 

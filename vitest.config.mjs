@@ -39,7 +39,6 @@ export default defineConfig({
       "src/test/e2e/**",
       "src/test/similarityDetection.test.ts",
       "src/test/auditTrail.test.ts",
-      "src/test/health.test.ts",
       "src/test/simulation.test.ts",
     ],
     server: {

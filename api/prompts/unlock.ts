@@ -9,6 +9,7 @@ import {
   normalizeContentHash,
   unwrapPromptKey,
 } from "../../src/lib/crypto/promptCrypto";
+import { fetchFromBlobStorage, isBlobReference } from "../../src/lib/stellar/blobStorage";
 import {
   getPrompt,
   getPromptEncryptionVersion,
@@ -115,9 +116,23 @@ async function handler(req: any, res: any) {
   const version = negotiateVersion(req, res);
   if (!version) return;
 
+  const parsed = parseRequestBody(UnlockRequestBody, req.body);
+  if (!parsed.success) {
+    res.status(400).json(
+      apiError(
+        ErrorCode.MISSING_FIELDS,
+        "token, promptId, address, and signedMessage are required.",
+        undefined,
+        version,
+      ),
+    );
+    return;
+  }
+
+  const unlockRequest = parsed.data;
   const clientIp = (req.headers["x-forwarded-for"] || req.socket.remoteAddress) as string;
-  const body = req.body ?? {};
-  const { address, promptId } = body as { address?: unknown; promptId?: unknown };
+  const address = unlockRequest.address;
+  const promptId = unlockRequest.promptId;
 
   // Authenticated bucket: wallet address is present.
   const isAuthenticated = Boolean(address);
@@ -205,7 +220,7 @@ async function handler(req: any, res: any) {
   const captchaNeeded = await isCaptchaRequired(addressStr, clientIp);
   if (captchaNeeded) {
     const captchaToken =
-      (body as { captchaToken?: unknown }).captchaToken ||
+      unlockRequest.captchaToken ||
       req.headers["x-captcha-token"];
 
     if (!captchaToken || typeof captchaToken !== "string") {
@@ -266,21 +281,6 @@ async function handler(req: any, res: any) {
     res.status(500).json(apiError(ErrorCode.CONFIGURATION_ERROR, "Configuration error.", undefined, version));
     return;
   }
-
-  const parsed = parseRequestBody(UnlockRequestBody, req.body);
-  if (!parsed.success) {
-    res.status(400).json(
-      apiError(
-        ErrorCode.MISSING_FIELDS,
-        "token, promptId, address, and signedMessage are required.",
-        undefined,
-        version,
-      ),
-    );
-    return;
-  }
-
-  const unlockRequest = parsed.data;
 
   try {
     // Support multiple active secrets during rotation grace period
@@ -440,6 +440,21 @@ async function handler(req: any, res: any) {
       };
     }
 
+    if (isBlobReference(encryptedPayload.encryptedPrompt)) {
+      try {
+        encryptedPayload.encryptedPrompt = await fetchFromBlobStorage(encryptedPayload.encryptedPrompt);
+      } catch (error) {
+        req.logger.error(
+          { address: unlockRequest.address, promptId: unlockRequest.promptId, error: error instanceof Error ? error.message : String(error) },
+          "Failed to fetch encrypted prompt from blob storage"
+        );
+        res.status(502).json(
+          apiError(ErrorCode.TEMPORARY_FAILURE, "Failed to fetch prompt data from blob storage.", undefined, version),
+        );
+        return;
+      }
+    }
+
     const keyBytes = await unwrapPromptKey(
       encryptedPayload.wrappedKey,
       unlockPublicKey,
@@ -451,7 +466,9 @@ async function handler(req: any, res: any) {
       keyBytes,
     );
     const contentHash = await hashPromptPlaintext(plaintext);
-    const storedHash = normalizeContentHash(encryptedPayload.contentHash);
+    const storedHash = encryptedPayload.contentHash
+      ? normalizeContentHash(encryptedPayload.contentHash)
+      : "";
 
     // Determine integrity state exposed to the buyer
     const integrity = {
@@ -487,10 +504,6 @@ async function handler(req: any, res: any) {
           storedHash: integrity.storedHash,
         }),
       ).catch(() => {});
-      res.status(500).json(
-        apiError(ErrorCode.INTEGRITY_FAILURE, "Prompt integrity check failed.", undefined, version),
-      );
-      return;
     }
 
     await recordSuccessfulAuth(unlockRequest.address, clientIp);
@@ -523,7 +536,7 @@ async function handler(req: any, res: any) {
           promptId: prompt.id.toString(),
           title: prompt.title,
           contentHash,
-          plaintext,
+          ...(integrity.status === "failed" ? {} : { plaintext }),
           integrity,
         },
         version,

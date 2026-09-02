@@ -624,10 +624,18 @@ export const PromptModal: React.FC<PromptModalProps> = ({
                       }
                       className="flex-1 group h-14 bg-white text-slate-950 hover:bg-emerald-400 font-black rounded-2xl transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      {!networkState.canTrustConfirmation
-                        ? "Transactions Unavailable"
-                        : "Confirm & Purchase"}{" "}
-                      <Wallet className="w-4 h-4" />
+                      {isPurchasing ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          Processing...
+                        </>
+                      ) : !networkState.canTrustConfirmation ? (
+                        "Transactions Unavailable"
+                      ) : (
+                        <>
+                          Confirm & Purchase <Wallet className="w-4 h-4" />
+                        </>
+                      )}
                     </button>
                     <button
                       onClick={() => addToCart(itemId)}

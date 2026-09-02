@@ -1,6 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { screen } from "@testing-library/react";
 import BrowsePage from "../pages/browse/page";
+import { renderWithProviders } from "@/test/render";
 
 vi.mock("@/pages/browse/FetchAllPrompts", () => ({
   default: ({ selectedCategory, selectedTag, priceRange, searchQuery, sortBy }: any) => (
@@ -16,7 +17,7 @@ describe("browse page sitemap entry handling", () => {
   });
 
   it("opens the matching prompt when a sitemap promptId query parameter is present", async () => {
-    render(<BrowsePage />);
+    renderWithProviders(<BrowsePage />);
     expect(screen.getByTestId("fetch-all-prompts")).toBeInTheDocument();
   });
 });

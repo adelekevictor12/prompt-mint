@@ -1,11 +1,47 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
+import { render, screen, fireEvent } from "@testing-library/react";
+import { useState } from "react";
 import { StellarAddressInput } from "@/components/StellarAddressInput";
+import type { StellarAddressValidationResult } from "@/components/StellarAddressInput";
 
-const VALID_ADDRESS = "GA7FYRB5V3AP6P2RROT2P6KRSZ3K6QI6W3Y6KX2X7HX6Q5Y6KX2X7HX6";
-const CONNECTED_ADDRESS = "GCXKG6RN4ON6MJG5VQZ2KQ3X4Y5P6Q7R8A9B0C1D2E3F4G5H6I7J8K9L0M";
+const VALID_ADDRESS = "GBNOV3GABZ2LBBYJDM3CCW5PIPJOS42JLUZBD4F5EM2LOXYMTGCRAQJX";
+const CONNECTED_ADDRESS = "GBX55CQTJ6LBFHJLDQNFXZYSAUHHHWAFNMFY6EGU6UQ5Z4ZC6GHVPMDD";
 const SHORT_ADDRESS = "GBBB";
+
+function StatefulWrapper({
+  initial = "",
+  connectedAddress,
+  disabled,
+  label,
+  className,
+  id,
+  onChange,
+}: {
+  initial?: string;
+  connectedAddress?: string;
+  disabled?: boolean;
+  label?: string;
+  className?: string;
+  id?: string;
+  onChange?: (value: string, validation: StellarAddressValidationResult) => void;
+}) {
+  const [value, setValue] = useState(initial);
+  const handleChange = onChange ?? vi.fn();
+  return (
+    <StellarAddressInput
+      value={value}
+      onChange={(v, validation) => {
+        setValue(v);
+        handleChange(v, validation);
+      }}
+      connectedAddress={connectedAddress}
+      disabled={disabled}
+      label={label}
+      className={className}
+      id={id}
+    />
+  );
+}
 
 describe("StellarAddressInput", () => {
   it("renders with default label and placeholder", () => {
@@ -19,64 +55,47 @@ describe("StellarAddressInput", () => {
     expect(screen.getByLabelText("Custom Label")).toBeInTheDocument();
   });
 
-  it("calls onChange with valid result when a valid address is entered", async () => {
+  it("calls onChange with valid result when a valid address is entered", () => {
     const onChange = vi.fn();
-    const user = userEvent.setup();
 
-    render(<StellarAddressInput value="" onChange={onChange} />);
+    render(<StatefulWrapper onChange={onChange} />);
     const input = screen.getByRole("textbox");
-    await user.type(input, VALID_ADDRESS);
+    fireEvent.change(input, { target: { value: VALID_ADDRESS } });
 
-    const lastCall = onChange.mock.calls[onChange.mock.calls.length - 1];
-    expect(lastCall[0]).toBe(VALID_ADDRESS.slice(-1));
-    expect(lastCall[1]).toEqual({ status: "valid" });
+    expect(onChange).toHaveBeenCalledWith(VALID_ADDRESS, { status: "valid" });
   });
 
-  it("shows invalid format error for a short address", async () => {
-    const onChange = vi.fn();
-    const user = userEvent.setup();
-
-    render(<StellarAddressInput value="" onChange={onChange} />);
+  it("shows invalid format error for a short address", () => {
+    render(<StatefulWrapper />);
     const input = screen.getByRole("textbox");
-    await user.type(input, SHORT_ADDRESS);
+    fireEvent.change(input, { target: { value: SHORT_ADDRESS } });
 
     expect(screen.getByText("Invalid Stellar address format")).toBeInTheDocument();
   });
 
-  it("shows self-address warning when address matches connected wallet", async () => {
-    const onChange = vi.fn();
-    const user = userEvent.setup();
-
+  it("shows self-address warning when address matches connected wallet", () => {
     render(
-      <StellarAddressInput
-        value=""
-        onChange={onChange}
-        connectedAddress={CONNECTED_ADDRESS}
-      />,
+      <StatefulWrapper connectedAddress={CONNECTED_ADDRESS} />,
     );
     const input = screen.getByRole("textbox");
-    await user.type(input, CONNECTED_ADDRESS);
+    fireEvent.change(input, { target: { value: CONNECTED_ADDRESS } });
 
     expect(screen.getByText("Cannot use your own wallet address")).toBeInTheDocument();
   });
 
-  it("shows a green check icon when the address is valid", async () => {
-    const user = userEvent.setup();
-
-    render(<StellarAddressInput value="" onChange={() => {}} />);
+  it("shows a green check icon when the address is valid", () => {
+    render(<StatefulWrapper />);
     const input = screen.getByRole("textbox");
-    await user.type(input, VALID_ADDRESS);
+    fireEvent.change(input, { target: { value: VALID_ADDRESS } });
 
     const checkIcon = document.querySelector(".text-emerald-400");
     expect(checkIcon).toBeInTheDocument();
   });
 
-  it("marks input as aria-invalid when address is invalid", async () => {
-    const user = userEvent.setup();
-
-    render(<StellarAddressInput value="" onChange={() => {}} />);
+  it("marks input as aria-invalid when address is invalid", () => {
+    render(<StatefulWrapper />);
     const input = screen.getByRole("textbox");
-    await user.type(input, SHORT_ADDRESS);
+    fireEvent.change(input, { target: { value: SHORT_ADDRESS } });
 
     expect(input).toHaveAttribute("aria-invalid", "true");
   });
@@ -84,7 +103,7 @@ describe("StellarAddressInput", () => {
   it("does not show aria-invalid for empty input", () => {
     render(<StellarAddressInput value="" onChange={() => {}} />);
     const input = screen.getByRole("textbox");
-    expect(input).not.toHaveAttribute("aria-invalid");
+    expect(input).toHaveAttribute("aria-invalid", "false");
   });
 
   it("does not show error message for empty input", () => {
@@ -109,19 +128,14 @@ describe("StellarAddressInput", () => {
     expect(screen.getByRole("textbox")).toHaveAttribute("id", "my-address-input");
   });
 
-  it("clears error when input is cleared", async () => {
-    const onChange = vi.fn();
-    const user = userEvent.setup();
-
-    const { rerender } = render(<StellarAddressInput value="" onChange={onChange} />);
+  it("clears error when input is cleared", () => {
+    render(<StatefulWrapper />);
     const input = screen.getByRole("textbox");
 
-    await user.type(input, SHORT_ADDRESS);
+    fireEvent.change(input, { target: { value: SHORT_ADDRESS } });
     expect(screen.getByText("Invalid Stellar address format")).toBeInTheDocument();
 
-    await user.clear(input);
-
-    rerender(<StellarAddressInput value="" onChange={onChange} />);
+    fireEvent.change(input, { target: { value: "" } });
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 });

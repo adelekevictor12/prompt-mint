@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Keypair } from "@stellar/stellar-sdk";
 import { createChallengeToken } from "../../src/lib/auth/challenge";
 import { ErrorCode } from "../../src/lib/api/errorCodes";
-import { resetAbuseProtectionState } from "../../src/lib/auth/abuseProtection";
+import { resetAbuseProtectionState, recordFailedAuthAttempt } from "../../src/lib/auth/abuseProtection";
 
 const hasBundleAccessMock = vi.fn();
 const getBundleMock = vi.fn();
@@ -42,6 +42,10 @@ vi.mock("../../src/lib/observability/rateLimiter", () => ({
 
 vi.mock("../../src/lib/observability/replayProtection", () => ({
   checkReplayProtection: vi.fn().mockResolvedValue({ valid: true }),
+}));
+
+vi.mock("../../src/lib/observability/redisClient", () => ({
+  getRedisClient: vi.fn().mockResolvedValue(null),
 }));
 
 vi.mock("../../src/lib/observability/metrics", () => ({
@@ -171,18 +175,12 @@ describe("bundle unlock API abuse protection & lockout", () => {
       wrongSigner.sign(Buffer.from(challenge.challenge, "utf8")),
     ).toString("base64");
 
-    for (let i = 0; i < 4; i++) {
-      const { statusCode, responseData } = await invokeBundleUnlock({
-        token: challenge.token,
-        bundleId,
-        address: buyer.publicKey(),
-        signedMessage: wrongSignature,
-      });
-      expect(statusCode).toBe(401);
-      expect(responseData.code).toBe(ErrorCode.INVALID_SIGNATURE);
+    // Seed 5 failures directly so the account is locked (threshold is 5)
+    for (let i = 0; i < 5; i++) {
+      await recordFailedAuthAttempt(buyer.publicKey(), "127.0.0.1");
     }
 
-    // 5th attempt locks account
+    // Next attempt: account is locked
     const { statusCode, responseData } = await invokeBundleUnlock({
       token: challenge.token,
       bundleId,

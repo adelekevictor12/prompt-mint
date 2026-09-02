@@ -1,9 +1,10 @@
-import { lazy, Suspense } from "react";
+import { lazy } from "react";
 import { Outlet, Route, Routes, useLocation } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { CartProvider } from "./providers/CartProvider";
 import { OnboardingProvider } from "./providers/OnboardingProvider";
 import { ErrorBoundary } from "./components/ErrorBoundary";
+import { RouteBoundary, SuspenseRoute } from "./components/RouteBoundary";
 import { useReducedMotion } from "./components/ReducedMotionProvider";
 import Home from "./pages/Home";
 
@@ -52,152 +53,152 @@ const AppLayout = () => (
   </main>
 );
 
+function ApplicationShell() {
+  const { pathname } = useLocation();
+
+  return (
+    <ErrorBoundary routeName="Application" reportPath={pathname}>
+      <Routes>
+        <Route element={<AppLayout />}>
+          <Route
+            path="/"
+            element={
+              <RouteBoundary routeName="Home">
+                <Home />
+              </RouteBoundary>
+            }
+          />
+          <Route
+            path="/browse"
+            element={
+              <SuspenseRoute routeName="Browse">
+                <BrowsePage />
+              </SuspenseRoute>
+            }
+          />
+          <Route
+            path="/prompt/:id"
+            element={
+              <SuspenseRoute routeName="Prompt Detail">
+                <PromptDetailPage />
+              </SuspenseRoute>
+            }
+          />
+          <Route
+            path="/creator/:address"
+            element={
+              <SuspenseRoute routeName="Creator">
+                <CreatorSharePage />
+              </SuspenseRoute>
+            }
+          />
+          <Route
+            path="/compare"
+            element={
+              <SuspenseRoute routeName="Compare">
+                <ComparePage />
+              </SuspenseRoute>
+            }
+          />
+          <Route
+            path="/sell"
+            element={
+              <SuspenseRoute routeName="Sell">
+                <SellPage />
+              </SuspenseRoute>
+            }
+          />
+          <Route
+            path="/chat"
+            element={
+              <SuspenseRoute routeName="Chat">
+                <ChatHome />
+              </SuspenseRoute>
+            }
+          />
+          <Route
+            path="/profile"
+            element={
+              <SuspenseRoute routeName="Profile">
+                <ProfilePage />
+              </SuspenseRoute>
+            }
+          />
+          <Route
+            path="/status"
+            element={
+              <SuspenseRoute routeName="Status">
+                <StatusPage />
+              </SuspenseRoute>
+            }
+          />
+          <Route
+            path="/settings/api-keys"
+            element={
+              <SuspenseRoute routeName="API Keys">
+                <ApiKeysPage />
+              </SuspenseRoute>
+            }
+          />
+          <Route
+            path="/moderation"
+            element={
+              <SuspenseRoute routeName="Moderation">
+                <ModerationPage />
+              </SuspenseRoute>
+            }
+          />
+          <Route
+            path="/history"
+            element={
+              <SuspenseRoute routeName="Transaction History">
+                <TransactionHistoryPage />
+              </SuspenseRoute>
+            }
+          />
+          <Route
+            path="/favorites"
+            element={
+              <SuspenseRoute routeName="Favorites">
+                <FavoritesPage />
+              </SuspenseRoute>
+            }
+          />
+          <Route
+            path="/collections/:id"
+            element={
+              <SuspenseRoute routeName="Collection Detail">
+                <CollectionDetailPage />
+              </SuspenseRoute>
+            }
+          />
+          <Route
+            path="/analytics"
+            element={
+              <SuspenseRoute routeName="Creator Analytics">
+                <CreatorAnalyticsPage />
+              </SuspenseRoute>
+            }
+          />
+          <Route
+            path="*"
+            element={
+              <RouteBoundary routeName="Not Found">
+                <Home />
+              </RouteBoundary>
+            }
+          />
+        </Route>
+      </Routes>
+    </ErrorBoundary>
+  );
+}
+
 function App() {
   return (
     <CartProvider>
       <OnboardingProvider>
-        <ErrorBoundary routeName="Application">
-        <Suspense
-          fallback={
-            <div className="flex items-center justify-center min-h-screen bg-slate-950">
-              <div className="text-white text-lg">Loading...</div>
-            </div>
-          }
-        >
-          <Routes>
-            <Route element={<AppLayout />}>
-              <Route
-                path="/"
-                element={
-                  <ErrorBoundary routeName="Home">
-                    <Home />
-                  </ErrorBoundary>
-                }
-              />
-              <Route
-                path="/browse"
-                element={
-                  <ErrorBoundary routeName="Browse">
-                    <BrowsePage />
-                  </ErrorBoundary>
-                }
-              />
-              <Route
-                path="/prompt/:id"
-                element={
-                  <ErrorBoundary routeName="Prompt Detail">
-                    <PromptDetailPage />
-                  </ErrorBoundary>
-                }
-              />
-              <Route
-                path="/creator/:address"
-                element={
-                  <ErrorBoundary routeName="Creator">
-                    <CreatorSharePage />
-                  </ErrorBoundary>
-                }
-              />
-              <Route
-                path="/compare"
-                element={
-                  <ErrorBoundary routeName="Compare">
-                    <ComparePage />
-                  </ErrorBoundary>
-                }
-              />
-              <Route
-                path="/sell"
-                element={
-                  <ErrorBoundary routeName="Sell">
-                    <SellPage />
-                  </ErrorBoundary>
-                }
-              />
-              <Route
-                path="/chat"
-                element={
-                  <ErrorBoundary routeName="Chat">
-                    <ChatHome />
-                  </ErrorBoundary>
-                }
-              />
-              <Route
-                path="/profile"
-                element={
-                  <ErrorBoundary routeName="Profile">
-                    <ProfilePage />
-                  </ErrorBoundary>
-                }
-              />
-              <Route
-                path="/status"
-                element={
-                  <ErrorBoundary routeName="Status">
-                    <StatusPage />
-                  </ErrorBoundary>
-                }
-              />
-              <Route
-                path="/settings/api-keys"
-                element={
-                  <ErrorBoundary routeName="API Keys">
-                    <ApiKeysPage />
-                  </ErrorBoundary>
-                }
-              />
-              <Route
-                path="/moderation"
-                element={
-                  <ErrorBoundary routeName="Moderation">
-                    <ModerationPage />
-                  </ErrorBoundary>
-                }
-              />
-              <Route
-                path="/history"
-                element={
-                  <ErrorBoundary routeName="Transaction History">
-                    <TransactionHistoryPage />
-                  </ErrorBoundary>
-                }
-              />
-              <Route
-                path="/favorites"
-                element={
-                  <ErrorBoundary routeName="Favorites">
-                    <FavoritesPage />
-                  </ErrorBoundary>
-                }
-              />
-              <Route
-                path="/collections/:id"
-                element={
-                  <ErrorBoundary routeName="Collection Detail">
-                    <CollectionDetailPage />
-                  </ErrorBoundary>
-                }
-              />
-              <Route
-                path="/analytics"
-                element={
-                  <ErrorBoundary routeName="Creator Analytics">
-                    <CreatorAnalyticsPage />
-                  </ErrorBoundary>
-                }
-              />
-              <Route
-                path="*"
-                element={
-                  <ErrorBoundary routeName="Not Found">
-                    <Home />
-                  </ErrorBoundary>
-                }
-              />
-            </Route>
-          </Routes>
-        </Suspense>
-      </ErrorBoundary>
+        <ApplicationShell />
       </OnboardingProvider>
     </CartProvider>
   );

@@ -12,6 +12,14 @@ vi.mock('../lib/stellar/promptHashClient', () => ({
     getPrompt: vi.fn(),
     checkAccess: vi.fn(),
   },
+  classifyContractError: vi.fn((error: unknown) => {
+    const msg = error instanceof Error ? error.message : String(error);
+    return { code: 'UNKNOWN', message: msg, isUserActionable: true, raw: msg };
+  }),
+  formatContractErrorMessage: vi.fn((error: unknown) => {
+    const msg = error instanceof Error ? error.message : String(error);
+    return msg;
+  }),
 }));
 
 const mockFetchAccount = vi.fn();

@@ -147,6 +147,12 @@ export function buildIncidentTicket(
 ): IncidentTicketInput {
   const severity = classifyRollbackSeverity(event);
   const title = `[${severity}] Automated rollback: ${event.workflowName} ${event.conclusion} (${shortSha(event.sha)})`;
+  const runCell = event.runUrl ? `[Actions run](${event.runUrl})` : "n/a";
+  const lastKnownCell = lastKnownGood
+    ? lastKnownGood.url
+      ? `[${shortSha(lastKnownGood.sha)}](${lastKnownGood.url}) (\`${lastKnownGood.id}\`)`
+      : `\`${lastKnownGood.sha}\` (\`${lastKnownGood.id}\`)`
+    : "_none found_";
 
   const body = [
     "## Automated deploy failure",
@@ -159,9 +165,9 @@ export function buildIncidentTicket(
     `| Failed SHA | \`${event.sha}\` |`,
     `| Ref | ${event.ref} |`,
     `| Actor | ${event.actor} |`,
-    `| Run | ${event.runUrl} |`,
+    `| Run | ${runCell} |`,
     `| Outcome | ${outcome} |`,
-    `| Last known-good | ${lastKnownGood ? `\`${lastKnownGood.sha}\` (\`${lastKnownGood.id}\`)` : "_none found_"} |`,
+    `| Last known-good | ${lastKnownCell} |`,
     "",
     "This ticket was opened by rollback automation. Do not close it until:",
     "1. Production is serving the last known-good artifact (or a confirmed fix).",

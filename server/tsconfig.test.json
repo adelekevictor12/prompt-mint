@@ -6,5 +6,5 @@
     "allowJs": true,
     "types": ["jest", "node"]
   },
-  "include": ["src/**/*.test.ts", "src/**/*.ts"]
+  "include": ["src/**/*.test.ts", "src/**/*.ts", "../src/lib/**/*.ts"]
 }

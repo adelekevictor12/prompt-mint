@@ -24,6 +24,8 @@ export function validateUnlockSecrets() {
   const challengeSecret = process.env.CHALLENGE_TOKEN_SECRET;
   const unlockPublicKey = process.env.UNLOCK_PUBLIC_KEY;
   const unlockPrivateKey = process.env.UNLOCK_PRIVATE_KEY;
+  const encryptedUnlockPrivateKey = process.env.ENCRYPTED_UNLOCK_PRIVATE_KEY;
+  const kmsProvider = process.env.ENCRYPTION_KMS_PROVIDER;
 
   const errors: string[] = [];
 
@@ -46,11 +48,17 @@ export function validateUnlockSecrets() {
     errors.push("UNLOCK_PUBLIC_KEY does not match base64 format.");
   }
 
-  if (!unlockPrivateKey) {
-    errors.push("UNLOCK_PRIVATE_KEY is not configured.");
-  } else if (isPlaceholder(unlockPrivateKey)) {
-    errors.push("UNLOCK_PRIVATE_KEY still has a placeholder value.");
-  } else if (!BASE64_KEY.test(unlockPrivateKey)) {
+  const hasPrivateKey = !!unlockPrivateKey && !isPlaceholder(unlockPrivateKey);
+  const hasEncryptedKey = !!encryptedUnlockPrivateKey && !isPlaceholder(encryptedUnlockPrivateKey);
+  const hasKmsMode = kmsProvider === "kms" || kmsProvider === "envelope";
+
+  if (!hasPrivateKey && !hasEncryptedKey && !hasKmsMode) {
+    if (isPlaceholder(unlockPrivateKey)) {
+      errors.push("UNLOCK_PRIVATE_KEY still has a placeholder value.");
+    } else {
+      errors.push("UNLOCK_PRIVATE_KEY is not configured.");
+    }
+  } else if (hasPrivateKey && !BASE64_KEY.test(unlockPrivateKey!)) {
     errors.push("UNLOCK_PRIVATE_KEY does not match base64 format.");
   }
 

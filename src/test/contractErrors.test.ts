@@ -18,7 +18,7 @@ describe("contract error mapping", () => {
     const result = classifyContractError("PromptNotFound");
 
     expect(result.code).toBe(CONTRACT_ERROR_CODES.PROMPT_NOT_FOUND);
-    expect(result.message).toContain("not found");
+    expect(result.message).toContain("not be found");
   });
 
   it("normalizes wrapped Soroban error strings", () => {

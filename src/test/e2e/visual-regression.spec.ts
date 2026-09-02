@@ -1,9 +1,17 @@
 import { expect, test } from "@playwright/test";
 
-const routes = [
-  { name: "home", path: "/" },
+/**
+ * Key screens visual regression test suite for Playwright.
+ * Specifically validates `browse`, `sell`, and `dashboard` as well as major app pages.
+ */
+const keyScreens = [
   { name: "browse", path: "/browse" },
   { name: "sell", path: "/sell" },
+  { name: "dashboard", path: "/analytics" },
+];
+
+const secondaryRoutes = [
+  { name: "home", path: "/" },
   { name: "chat", path: "/chat" },
   { name: "profile", path: "/profile" },
   { name: "status", path: "/status" },
@@ -37,15 +45,31 @@ test.describe("major page visual regressions", () => {
     });
   });
 
-  for (const route of routes) {
-    test(`${route.name} page`, async ({ page }) => {
-      await page.goto(route.path, { waitUntil: "domcontentloaded" });
-      await expect(page.locator("body")).toBeVisible();
-      await expect(page).toHaveScreenshot(`${route.name}.png`, {
-        fullPage: true,
-        animations: "disabled",
-        caret: "hide",
+  test.describe("key screens visual snapshot regression", () => {
+    for (const screen of keyScreens) {
+      test(`visual snapshot - ${screen.name} screen (${screen.path})`, async ({ page }) => {
+        await page.goto(screen.path, { waitUntil: "domcontentloaded" });
+        await expect(page.locator("body")).toBeVisible();
+        await expect(page).toHaveScreenshot(`${screen.name}-screen.png`, {
+          fullPage: true,
+          animations: "disabled",
+          caret: "hide",
+        });
       });
-    });
-  }
+    }
+  });
+
+  test.describe("additional application routes", () => {
+    for (const route of secondaryRoutes) {
+      test(`${route.name} page`, async ({ page }) => {
+        await page.goto(route.path, { waitUntil: "domcontentloaded" });
+        await expect(page.locator("body")).toBeVisible();
+        await expect(page).toHaveScreenshot(`${route.name}.png`, {
+          fullPage: true,
+          animations: "disabled",
+          caret: "hide",
+        });
+      });
+    }
+  });
 });

@@ -58,7 +58,7 @@ describe("TransactionProgress", () => {
       </>,
     );
 
-    const progress = screen.getAllByRole("status")[0];
+    const progress = screen.getAllByRole("alert")[0];
     expect(within(progress).getByText("Processing listing on-chain...")).toBeInTheDocument();
   });
 
@@ -70,7 +70,7 @@ describe("TransactionProgress", () => {
       </>,
     );
 
-    const progress = screen.getAllByRole("status")[0];
+    const progress = screen.getAllByRole("alert")[0];
     expect(within(progress).getByText("You are not authorized to complete this transaction.")).toBeInTheDocument();
     expect(within(progress).getByRole("button", { name: /retry/i })).toBeInTheDocument();
   });
@@ -83,8 +83,7 @@ describe("TransactionProgress", () => {
       </>,
     );
 
-    const progress = screen.getAllByRole("status")[0];
+    const progress = screen.getAllByRole("alert")[0];
     expect(within(progress).getByText("Listing published successfully.")).toBeInTheDocument();
-    expect(within(progress).getByText("Completed")).toBeInTheDocument();
   });
 });

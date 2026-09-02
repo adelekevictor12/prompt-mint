@@ -7,16 +7,21 @@ interface RateLimitConfig {
 }
 
 export type UserTier = "free" | "verified" | "premium";
+export type RateLimitType = "challenge" | "unlock" | "bundle_unlock" | "analytics";
 
 const ONE_HOUR_MS = 60 * 60 * 1000;
 
 // Unauthenticated (no wallet address provided) requests get stricter limits.
-const limits: Record<string, { authenticated: RateLimitConfig; unauthenticated: RateLimitConfig }> = {
+const limits: Record<RateLimitType, { authenticated: RateLimitConfig; unauthenticated: RateLimitConfig }> = {
   challenge: {
     unauthenticated: { max: 10, windowMs: 60_000 },
-    authenticated: { max: 10, windowMs: 60_000 },
+    authenticated: { max: 15, windowMs: 60_000 },
   },
   unlock: {
+    unauthenticated: { max: 3, windowMs: 60_000 },
+    authenticated: { max: 5, windowMs: 60_000 },
+  },
+  bundle_unlock: {
     unauthenticated: { max: 3, windowMs: 60_000 },
     authenticated: { max: 5, windowMs: 60_000 },
   },
@@ -83,11 +88,14 @@ async function redisCheck(
 }
 
 export async function checkRateLimit(
-  type: "challenge" | "unlock" | "analytics",
+  type: RateLimitType,
   identifier: string,
   authenticated = false,
 ): Promise<{ success: boolean; limit: number; remaining: number; reset: number }> {
-  const config = limits[type][authenticated ? "authenticated" : "unauthenticated"];
+  const config = limits[type]?.[authenticated ? "authenticated" : "unauthenticated"] ?? {
+    max: 10,
+    windowMs: 60_000,
+  };
   const bucketKey = `${type}:${identifier}`;
 
   try {
@@ -98,6 +106,70 @@ export async function checkRateLimit(
   }
 
   return inMemoryCheck(bucketKey, config);
+}
+
+/**
+ * Dedicated rate limit check keyed by wallet address (#449).
+ */
+export async function checkWalletRateLimit(
+  type: RateLimitType,
+  walletAddress: string,
+  authenticated = true,
+): Promise<{ success: boolean; limit: number; remaining: number; reset: number }> {
+  return checkRateLimit(type, `wallet:${walletAddress}`, authenticated);
+}
+
+/**
+ * Dual rate limit checker evaluating both IP-based and wallet-based limits (#449).
+ */
+export async function checkDualRateLimit(
+  type: RateLimitType,
+  opts: { ip: string; wallet?: string | null; authenticated?: boolean },
+): Promise<{
+  success: boolean;
+  blockedBy?: "ip" | "wallet";
+  limit: number;
+  remaining: number;
+  reset: number;
+}> {
+  // 1. Check IP rate limit first
+  const ipResult = await checkRateLimit(type, `ip:${opts.ip}`, Boolean(opts.authenticated));
+  if (!ipResult.success) {
+    return {
+      success: false,
+      blockedBy: "ip",
+      limit: ipResult.limit,
+      remaining: ipResult.remaining,
+      reset: ipResult.reset,
+    };
+  }
+
+  // 2. Check wallet rate limit if wallet address is supplied
+  if (opts.wallet) {
+    const walletResult = await checkWalletRateLimit(type, opts.wallet, true);
+    if (!walletResult.success) {
+      return {
+        success: false,
+        blockedBy: "wallet",
+        limit: walletResult.limit,
+        remaining: walletResult.remaining,
+        reset: walletResult.reset,
+      };
+    }
+    return {
+      success: true,
+      limit: Math.min(ipResult.limit, walletResult.limit),
+      remaining: Math.min(ipResult.remaining, walletResult.remaining),
+      reset: Math.max(ipResult.reset, walletResult.reset),
+    };
+  }
+
+  return {
+    success: true,
+    limit: ipResult.limit,
+    remaining: ipResult.remaining,
+    reset: ipResult.reset,
+  };
 }
 
 /**

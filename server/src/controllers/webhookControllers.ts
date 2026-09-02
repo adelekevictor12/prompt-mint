@@ -17,7 +17,9 @@ import { z } from "zod";
  * "listing sales, transfers, disputes, and version updates").
  */
 const ALLOWED_EVENTS = [
+  "PromptCreated", // new listing created
   "PromptPurchased", // listing sales
+  "PromptPriceUpdated", // price changes
   "LicenseTransferred", // transfers
   "DisputeOpened", // disputes
   "DisputeResolved", // disputes

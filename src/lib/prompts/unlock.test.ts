@@ -45,7 +45,7 @@ describe("unlockPromptContent client", () => {
 
     const signMessage = vi.fn().mockResolvedValue({ signedMessage: "signed-by-wallet" });
     const result = await unlockPromptContent(
-      "GBUYERACCOUNT1234567890ABCDEFGH1234567890ABCDEFGH123456789",
+      "GA6HITF5ZBTSGXVGSLM56FEYDPS7T4KRFACQIR34RZRR4JTI5LJSX2WE",
       7n,
       signMessage,
     );
@@ -103,7 +103,7 @@ describe("unlockPromptContent client", () => {
     );
 
     const result = await unlockPromptContent(
-      "GBUYERACCOUNT1234567890ABCDEFGH1234567890ABCDEFGH123456789",
+      "GA6HITF5ZBTSGXVGSLM56FEYDPS7T4KRFACQIR34RZRR4JTI5LJSX2WE",
       "7",
       vi.fn().mockResolvedValue({ signedMessage: "signed-by-wallet" }),
     );
@@ -148,7 +148,7 @@ describe("unlockPromptContent client", () => {
 
     await expect(
       unlockPromptContent(
-        "GBUYERACCOUNT1234567890ABCDEFGH1234567890ABCDEFGH123456789",
+        "GA6HITF5ZBTSGXVGSLM56FEYDPS7T4KRFACQIR34RZRR4JTI5LJSX2WE",
         "7",
         vi.fn().mockResolvedValue({ signedMessage: "signed-by-wallet" }),
       ),
@@ -188,7 +188,7 @@ describe("unlockPromptContent client", () => {
 
     await expect(
       unlockPromptContent(
-        "GBUYERACCOUNT1234567890ABCDEFGH1234567890ABCDEFGH123456789",
+        "GA6HITF5ZBTSGXVGSLM56FEYDPS7T4KRFACQIR34RZRR4JTI5LJSX2WE",
         "7",
         vi.fn().mockResolvedValue({ signedMessage: "signed-by-wallet" }),
       ),
@@ -224,7 +224,7 @@ describe("unlockPromptContent client", () => {
 
     await expect(
       unlockPromptContent(
-        "GBUYERACCOUNT1234567890ABCDEFGH1234567890ABCDEFGH123456789",
+        "GA6HITF5ZBTSGXVGSLM56FEYDPS7T4KRFACQIR34RZRR4JTI5LJSX2WE",
         "7",
         vi.fn().mockResolvedValue({ signedMessage: "signed-by-wallet" }),
       ),

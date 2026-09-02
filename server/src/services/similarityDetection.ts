@@ -8,14 +8,15 @@
  * Thresholds:
  *   score >= 0.90  → "highly_similar" (flag for moderation)
  *   score >= 0.70  → "suspicious"
- *   score <  0.70  → "clean"
+ *   score < 0.70  → "clean"
  */
 
 import Prompt from "../models/Prompt";
+import { createHash } from "crypto";
 
-// ---------------------------------------------------------------------------
+// ------------------------------------------------------------------
 // Text preprocessing
-// ---------------------------------------------------------------------------
+// ------------------------------------------------------------------
 
 function tokenize(text: string): string[] {
   return text
@@ -37,9 +38,9 @@ function buildTermFrequency(tokens: string[]): Map<string, number> {
   return tf;
 }
 
-// ---------------------------------------------------------------------------
+// ------------------------------------------------------------------
 // Cosine similarity on TF vectors
-// ---------------------------------------------------------------------------
+// ------------------------------------------------------------------
 
 export function cosineSimilarity(a: Map<string, number>, b: Map<string, number>): number {
   let dot = 0;
@@ -59,9 +60,9 @@ export function cosineSimilarity(a: Map<string, number>, b: Map<string, number>)
   return denom === 0 ? 0 : dot / denom;
 }
 
-// ---------------------------------------------------------------------------
+// -----------------------------------------------------------------+
 // Levenshtein distance (for short texts)
-// ---------------------------------------------------------------------------
+// ------------------------------------------------------------------
 
 export function levenshteinRatio(a: string, b: string): number {
   const m = a.length;
@@ -85,9 +86,9 @@ export function levenshteinRatio(a: string, b: string): number {
   return maxLen === 0 ? 1 : 1 - distance / maxLen;
 }
 
-// ---------------------------------------------------------------------------
+// ------------------------------------------------------------------
 // Score computation
-// ---------------------------------------------------------------------------
+// ------------------------------------------------------------------
 
 export function computeSimilarityScore(textA: string, textB: string): number {
   const norm = (s: string) => s.toLowerCase().trim();
@@ -105,16 +106,16 @@ export function computeSimilarityScore(textA: string, textB: string): number {
   return cosineSimilarity(tfA, tfB);
 }
 
-// ---------------------------------------------------------------------------
+// -------------------------------------------------------------------
 // Thresholds
-// ---------------------------------------------------------------------------
+// ------------------------------------------------------------------
 
 export const SIMILARITY_THRESHOLDS = {
   HIGHLY_SIMILAR: 0.9,
   SUSPICIOUS: 0.7,
 } as const;
 
-export type SimilarityFlag = "clean" | "suspicious" | "highly_similar";
+export type SimilarityFlag = "clean" | "suspicious" | "highly_similar" | "duplicate";
 
 export function classifyScore(score: number): SimilarityFlag {
   if (score >= SIMILARITY_THRESHOLDS.HIGHLY_SIMILAR) return "highly_similar";
@@ -122,9 +123,41 @@ export function classifyScore(score: number): SimilarityFlag {
   return "clean";
 }
 
-// ---------------------------------------------------------------------------
+// ------------------------------------------------------------------
+// Content hashing for duplicate detection
+// ------------------------------------------------------------------
+
+function hashContent(content: string): string {
+  return createHash("sha256").update(content.trim()).digest("hex");
+}
+
+async function findDuplicateByHash(
+  hash: string,
+  excludeOnChainId?: string,
+): Promise<string | null> {
+  const query: Record<string, unknown> = { contentHash: hash };
+  if (excludeOnChainId) {
+    query.onChainId = { $ne: excludeOnChainId };
+  }
+  const existing = await Prompt.findOne(query, { onChainId: 1 }).lean();
+  return existing?.onChainId ?? null;
+}
+
+/**
+ * Check if a prompt with the same content hash already exists.
+ * Can be used before creating a new prompt to prevent duplicates.
+ */
+export async function checkContentHashExists(
+  content: string,
+): Promise<{ exists: boolean; onChainId: string | null }> {
+  const hash = hashContent(content);
+  const onChainId = await findDuplicateByHash(hash);
+  return { exists: onChainId !== null, onChainId };
+}
+
+// ------------------------------------------------------------------
 // Main scan function: called after a new prompt is indexed
-// ---------------------------------------------------------------------------
+// ------------------------------------------------------------------
 
 export interface SimilarityResult {
   flag: SimilarityFlag;
@@ -136,6 +169,9 @@ export interface SimilarityResult {
  * Scan a newly indexed prompt against all existing active prompts.
  * Updates the Prompt document with the result and returns the result.
  *
+ * If an identical content hash exists, immediately flags the prompt as
+ * "duplicate" and skips the similarity scan.
+ *
  * @param onChainId  The on-chain ID of the newly created prompt.
  * @param content    The prompt text to compare (title + body combined).
  */
@@ -143,6 +179,28 @@ export async function scanForSimilarity(
   onChainId: string,
   content: string,
 ): Promise<SimilarityResult> {
+  const contentHash = hashContent(content);
+  const duplicateOnChainId = await findDuplicateByHash(contentHash, onChainId);
+
+  if (duplicateOnChainId) {
+    const flag: SimilarityFlag = "duplicate";
+    const score = 1;
+    await Prompt.findOneAndUpdate(
+      { onChainId },
+      {
+        $set: {
+          contentHash,
+          similarityFlag: flag,
+          similarityScore: score,
+          similarTo: duplicateOnChainId,
+          similarityCheckedAt: new Date(),
+        },
+      },
+    );
+    console.warn(`[similarity] Prompt ${onChainId} is a duplicate of ${duplicateOnChainId}`);
+    return { flag, score, similarTo: duplicateOnChainId };
+  }
+
   const existing = await Prompt.find(
     { onChainId: { $ne: onChainId } },
     { onChainId: 1, content: 1, title: 1 },
@@ -166,6 +224,7 @@ export async function scanForSimilarity(
     { onChainId },
     {
       $set: {
+        contentHash,
         similarityFlag: flag,
         similarityScore: maxScore,
         similarTo: flag !== "clean" ? mostSimilarId : null,
@@ -176,8 +235,8 @@ export async function scanForSimilarity(
 
   if (flag !== "clean") {
     console.warn(
-      `[similarity] Prompt ${onChainId} flagged as "${flag}" ` +
-        `(score=${maxScore.toFixed(3)}, similar to ${mostSimilarId})`,
+      `[similarity] Prompt ${onChainId} flagged as "${flag}" \
+        (score=${maxScore.toFixed(3)}, similar to ${mostSimilarId})`,
     );
   }
 

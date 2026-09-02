@@ -14,6 +14,44 @@ This repository includes:
 
 The product is intentionally designed around prompt licensing rather than NFT transfer. That matches the actual use case: creators want repeated sales, buyers want reliable access, and the platform needs transparent settlement on Stellar.
 
+## System Architecture
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Creator as Creator / Buyer Wallet
+    participant Frontend as Frontend (Vite + React)
+    participant Contract as Soroban Contract (Stellar)
+    participant Unlock as Unlock Service (Serverless API)
+
+    rect rgb(30, 41, 59)
+    note right of Creator: 1. Listing Creation
+    Creator->>Frontend: Encrypt prompt & wrap key
+    Frontend->>Contract: create_prompt(payload, wrappedKey, preview, price)
+    Contract-->>Frontend: Prompt ID created & listing stored
+    end
+
+    rect rgb(30, 58, 138)
+    note right of Creator: 2. Purchase Flow
+    Creator->>Frontend: Select prompt & approve XLM spend
+    Frontend->>Contract: buy_prompt(promptId)
+    Contract->>Contract: Transfer XLM fee split & record has_access
+    Contract-->>Frontend: Purchase recorded on-chain
+    end
+
+    rect rgb(20, 83, 45)
+    note right of Creator: 3. Unlock Flow
+    Frontend->>Unlock: Request challenge token (/api/auth/challenge)
+    Unlock-->>Frontend: Challenge token + message
+    Creator->>Frontend: Sign challenge with Stellar wallet
+    Frontend->>Unlock: Submit unlock request (/api/prompts/unlock)
+    Unlock->>Contract: Verify has_access(buyer, promptId)
+    Contract-->>Unlock: Access confirmed
+    Unlock->>Unlock: Verify signature, unwrap key & decrypt AES ciphertext
+    Unlock-->>Frontend: Return plaintext & integrity status
+    end
+```
+
 ## Problem Statement
 
 AI prompt creators increasingly monetize high-value workflows, but the current tooling is weak:

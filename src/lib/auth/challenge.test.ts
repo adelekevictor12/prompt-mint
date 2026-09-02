@@ -6,8 +6,10 @@ import { Keypair } from "@stellar/stellar-sdk";
 import {
   buildChallengeMessage,
   createChallengeToken,
+  getChallengeTtlMs,
   verifyChallengeSignature,
   verifyChallengeToken,
+  DEFAULT_TTL_MS,
 } from "./challenge";
 
 describe("unlock challenge verification", () => {
@@ -47,5 +49,18 @@ describe("unlock challenge verification", () => {
     expect(() =>
       verifyChallengeToken(secret, challenge.token, address, "7", 1_700_000_010_500),
     ).toThrow("expired");
+  });
+
+  it("configures challenge token TTL via environment variable (#453)", () => {
+    const defaultTtl = getChallengeTtlMs();
+    expect(defaultTtl).toBe(DEFAULT_TTL_MS);
+
+    process.env.CHALLENGE_TTL_MS = "60000";
+    expect(getChallengeTtlMs()).toBe(60000);
+    delete process.env.CHALLENGE_TTL_MS;
+
+    process.env.CHALLENGE_TOKEN_TTL_MS = "120000";
+    expect(getChallengeTtlMs()).toBe(120000);
+    delete process.env.CHALLENGE_TOKEN_TTL_MS;
   });
 });

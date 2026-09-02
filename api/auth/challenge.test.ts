@@ -20,6 +20,10 @@ vi.mock("../../src/lib/observability/rateLimiter", () => ({
   checkRateLimit: vi.fn(),
 }));
 
+vi.mock("../../src/lib/observability/redisClient", () => ({
+  getRedisClient: vi.fn().mockResolvedValue(null),
+}));
+
 vi.mock("../../src/lib/observability/metrics", () => ({
   metrics: {
     trackChallengeIssued: vi.fn(),
@@ -136,6 +140,35 @@ describe("challenge API rate limiting and abuse prevention", () => {
     expect(setHeaders["X-RateLimit-Limit"]).toBe(10);
     expect(setHeaders["X-RateLimit-Remaining"]).toBe(0);
   });
+
+  it("enforces rate limit per wallet address (HTTP 429 RATE_LIMIT_WALLET)", async () => {
+    // First call (IP) passes, second call (wallet) fails
+    vi.mocked(checkRateLimit)
+      .mockResolvedValueOnce({
+        success: true,
+        limit: 10,
+        remaining: 9,
+        reset: 60_000,
+      })
+      .mockResolvedValueOnce({
+        success: false,
+        limit: 15,
+        remaining: 0,
+        reset: 60_000,
+      });
+
+    const buyer = Keypair.random();
+    const { statusCode, responseData, setHeaders } = await invoke({
+      address: buyer.publicKey(),
+      promptId: "99",
+    });
+
+    expect(statusCode).toBe(429);
+    expect(responseData.code).toBe(ErrorCode.RATE_LIMIT_WALLET);
+    expect(setHeaders["X-RateLimit-Limit"]).toBe(15);
+    expect(setHeaders["X-RateLimit-Remaining"]).toBe(0);
+  });
+
 
   it("rejects challenge generation if the wallet account is locked (HTTP 423)", async () => {
     const buyer = Keypair.random();

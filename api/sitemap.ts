@@ -2,7 +2,9 @@ import { withObservability } from "../src/lib/observability/wrapper";
 import connectDb from "../server/src/db/connectDb";
 import Prompt from "../server/src/models/Prompt";
 
-const APP_URL = process.env.APP_URL ?? "https://prompthash.io";
+function getAppUrl(): string {
+  return process.env.APP_URL ?? "https://prompthash.io";
+}
 
 function escapeXml(value: string): string {
   return value
@@ -30,6 +32,7 @@ async function handler(req: any, res: any) {
     return;
   }
 
+  const APP_URL = getAppUrl();
   const urls = getBaseUrls().map((path) => `${APP_URL}${path}`);
   let error: string | null = null;
 

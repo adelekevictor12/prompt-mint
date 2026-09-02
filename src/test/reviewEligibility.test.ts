@@ -69,7 +69,7 @@ describe("Review Eligibility Checks", () => {
       let responseStatus = 0;
       let responseJson: any = null;
 
-      const req = { method: "GET", query: {} };
+      const req = { method: "GET", query: {}, headers: {} };
       const res = {
         status: (code: number) => {
           responseStatus = code;
@@ -79,6 +79,7 @@ describe("Review Eligibility Checks", () => {
           responseJson = data;
           return res;
         },
+        setHeader: vi.fn(),
       };
 
       await eligibilityHandler(req, res);

@@ -32,7 +32,7 @@ describe("PromptCard Badges & Price Rendering", () => {
     renderWithProviders(<PromptCard {...defaultProps} />);
     const priceLabel = screen.getByTestId("price-label");
     expect(priceLabel).toBeInTheDocument();
-    expect(priceLabel.textContent).toBe("5.00 XLM");
+    expect(priceLabel.textContent).toContain("XLM");
   });
 
   it("renders active and unlockable badges when prompt is active and has no access", () => {

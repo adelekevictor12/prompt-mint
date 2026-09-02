@@ -31,6 +31,8 @@ import { browserStellarConfig } from "@/lib/stellar/browserConfig";
  *   Any contract event → ["purchased-prompts"]     (buyer's license list)
  *   Any contract event → ["saved-prompts"]          (buyer saved listings)
  *   Any contract event → ["prompt-access"]         (per-prompt access checks)
+ *   Any contract event → ["prompt-detail", id]     (detail modal / /prompt/:id price)
+ *   Any contract event → ["marketplace-prompts-cache"] (cart price snapshot)
  */
 
 const POLL_INTERVAL_MS = 10_000;
@@ -42,6 +44,8 @@ export function invalidateAllPromptQueries(queryClient: QueryClient) {
     queryClient.invalidateQueries({ queryKey: ["purchased-prompts"] }),
     queryClient.invalidateQueries({ queryKey: ["saved-prompts"] }),
     queryClient.invalidateQueries({ queryKey: ["prompt-access"] }),
+    queryClient.invalidateQueries({ queryKey: ["prompt-detail"] }),
+    queryClient.invalidateQueries({ queryKey: ["marketplace-prompts-cache"] }),
   ]);
 }
 

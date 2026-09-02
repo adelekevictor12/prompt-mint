@@ -48,6 +48,44 @@ impl Storage {
         false
     }
 
+    pub fn get_min_price(env: &Env) -> Option<i128> {
+        let key = DataKey::MinPrice;
+        let value = env.storage().persistent().get(&key);
+        if env.storage().persistent().has(&key) {
+            Self::extend_key_ttl(env, &key);
+        }
+        value
+    }
+
+    pub fn set_min_price(env: &Env, price: Option<i128>) {
+        let key = DataKey::MinPrice;
+        if let Some(p) = price {
+            env.storage().persistent().set(&key, &p);
+            Self::extend_key_ttl(env, &key);
+        } else {
+            env.storage().persistent().remove(&key);
+        }
+    }
+
+    pub fn get_max_price(env: &Env) -> Option<i128> {
+        let key = DataKey::MaxPrice;
+        let value = env.storage().persistent().get(&key);
+        if env.storage().persistent().has(&key) {
+            Self::extend_key_ttl(env, &key);
+        }
+        value
+    }
+
+    pub fn set_max_price(env: &Env, price: Option<i128>) {
+        let key = DataKey::MaxPrice;
+        if let Some(p) = price {
+            env.storage().persistent().set(&key, &p);
+            Self::extend_key_ttl(env, &key);
+        } else {
+            env.storage().persistent().remove(&key);
+        }
+    }
+
     pub fn extend_key_ttl(env: &Env, key: &DataKey) {
         if env.storage().persistent().has(key) {
             env.storage().persistent().extend_ttl(

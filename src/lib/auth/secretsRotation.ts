@@ -9,7 +9,7 @@
 import { randomBytes } from "crypto";
 import { getRedisClient } from "../observability/redisClient";
 import { isPlaceholder } from "../validation/envValidator";
-import { recordAuditEvent } from "../../server/src/services/auditTrail";
+import { recordAuditEvent } from "../../../server/src/services/auditTrail";
 
 export const NINETY_DAYS_MS = 90 * 24 * 60 * 60 * 1000;
 export const DEFAULT_GRACE_PERIOD_MS = 7 * 24 * 60 * 60 * 1000; // 7 days overlapping validity

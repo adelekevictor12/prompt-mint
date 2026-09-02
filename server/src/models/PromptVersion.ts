@@ -39,6 +39,8 @@ const promptVersionSchema = new mongoose.Schema(
 );
 
 promptVersionSchema.index({ promptId: 1, versionIndex: 1 }, { unique: true });
+// Discourage duplicate listings by ensuring the same content hash cannot be stored more than once.
+promptVersionSchema.index({ contentHash: 1 }, { unique: true });
 
 const PromptVersion =
   mongoose.models.PromptVersion || mongoose.model("PromptVersion", promptVersionSchema);

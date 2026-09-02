@@ -2,7 +2,39 @@ import { createHmac, randomUUID, timingSafeEqual } from "crypto";
 import { Buffer } from "buffer";
 import { Keypair } from "@stellar/stellar-sdk";
 
-const DEFAULT_TTL_MS = 5 * 60 * 1000;
+export const DEFAULT_TTL_MS = 5 * 60 * 1000;
+export const MIN_TTL_MS = 5 * 1000; // 5 seconds
+export const MAX_TTL_MS = 60 * 60 * 1000; // 1 hour
+
+/**
+ * Returns the environment-configured challenge token TTL in milliseconds.
+ * Reads process.env.CHALLENGE_TTL_MS or process.env.CHALLENGE_TOKEN_TTL_MS.
+ *
+ * Security Tradeoffs (#453):
+ * - Short TTL (e.g., 30s - 2m): Reduces replay attack window and token interception risk,
+ *   but may cause failure if user takes long to approve wallet signature prompt.
+ * - Long TTL (e.g., 5m - 15m): More resilient against network delays and user prompts,
+ *   but increases vulnerability window if challenge tokens are captured in transit.
+ */
+export function getChallengeTtlMs(overrideMs?: number): number {
+  if (typeof overrideMs === "number" && !isNaN(overrideMs)) {
+    return Math.max(MIN_TTL_MS, Math.min(MAX_TTL_MS, overrideMs));
+  }
+
+  const envVal =
+    process.env.CHALLENGE_TTL_MS ||
+    process.env.CHALLENGE_TOKEN_TTL_MS ||
+    process.env.NEXT_PUBLIC_CHALLENGE_TTL_MS;
+
+  if (envVal) {
+    const parsed = parseInt(envVal, 10);
+    if (!isNaN(parsed) && parsed > 0) {
+      return Math.max(MIN_TTL_MS, Math.min(MAX_TTL_MS, parsed));
+    }
+  }
+
+  return DEFAULT_TTL_MS;
+}
 
 export interface ChallengePayload {
   address: string;
@@ -38,7 +70,7 @@ export function createChallengeToken(
   address: string,
   promptId: string,
   now = Date.now(),
-  ttlMs = DEFAULT_TTL_MS,
+  ttlMs = getChallengeTtlMs(),
 ) {
   const payload: ChallengePayload = {
     address,
@@ -122,4 +154,69 @@ export function verifyChallengeSignature(
   } catch {
     return false;
   }
+}
+
+/**
+ * Message a reporter wallet signs when filing an abuse report. Scoping it to the
+ * exact target (type + id) and a timestamp means a captured signature can't be
+ * replayed to file a different report or after it expires.
+ */
+export function buildReportAuthMessage(
+  address: string,
+  targetType: string,
+  targetId: string,
+  timestamp: number,
+): string {
+  return `prompt-hash report:${address}:${targetType}:${targetId}:${timestamp}`;
+}
+
+/** Verifies that `signature` proves control of `address` for a specific report. */
+export function verifyReportSignature(
+  address: string,
+  targetType: string,
+  targetId: string,
+  timestamp: number,
+  signature: string,
+): boolean {
+  const message = buildReportAuthMessage(address, targetType, targetId, timestamp);
+  return verifyChallengeSignature(address, message, signature);
+}
+
+const REPORT_SIGNATURE_MAX_AGE_MS = 5 * 60 * 1000; // 5 minutes
+
+/**
+ * Validates a reporter-supplied signature and timestamp. Returns a normalized
+ * error so endpoints can respond consistently.
+ */
+export function verifyReportAuth({
+  address,
+  targetType,
+  targetId,
+  timestamp,
+  signature,
+  now = Date.now(),
+}: {
+  address?: string;
+  targetType?: string;
+  targetId?: string;
+  timestamp?: number;
+  signature?: string;
+  now?: number;
+}): { ok: boolean; status: number; error?: string } {
+  if (!address) {
+    return { ok: false, status: 401, error: "Reporter wallet address is required" };
+  }
+  if (!targetType || !targetId) {
+    return { ok: false, status: 400, error: "Report target is required" };
+  }
+  if (!timestamp || !signature) {
+    return { ok: false, status: 401, error: "Reporter signature is required" };
+  }
+  if (Math.abs(now - timestamp) > REPORT_SIGNATURE_MAX_AGE_MS) {
+    return { ok: false, status: 401, error: "Reporter signature has expired" };
+  }
+  if (!verifyReportSignature(address, targetType, targetId, timestamp, signature)) {
+    return { ok: false, status: 401, error: "Invalid reporter signature" };
+  }
+  return { ok: true, status: 200 };
 }

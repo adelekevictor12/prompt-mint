@@ -15,9 +15,12 @@ function signModeratorAction(keypair: Keypair, purpose: string, timestamp = Date
 function responseRecorder() {
   let statusCode = 0;
   let body: any;
+  const headers: Record<string, string> = {};
   const response = {
     status(code: number) { statusCode = code; return response; },
     json(data: any) { body = data; return response; },
+    setHeader(key: string, value: string) { headers[key] = value; return response; },
+    getHeader(key: string) { return headers[key]; },
   };
   return { response, get status() { return statusCode; }, get body() { return body; } };
 }
@@ -27,7 +30,7 @@ describe("review list contract", () => {
 
   it("paginates and filters while preserving overall statistics", async () => {
     const recorded = responseRecorder();
-    await listReviews({ method: "GET", query: { promptId: "1", page: "1", limit: "1", rating: "5", sort: "helpful" } }, recorded.response);
+    await listReviews({ method: "GET", headers: {}, query: { promptId: "1", page: "1", limit: "1", rating: "5", sort: "helpful" } }, recorded.response);
     expect(recorded.status).toBe(200);
     expect(recorded.body.reviews).toHaveLength(1);
     expect(recorded.body.reviews[0].rating).toBe(5);
@@ -37,7 +40,7 @@ describe("review list contract", () => {
 
   it("rejects unsafe list query values", async () => {
     const recorded = responseRecorder();
-    await listReviews({ method: "GET", query: { promptId: "1", page: "0", sort: "random" } }, recorded.response);
+    await listReviews({ method: "GET", headers: {}, query: { promptId: "1", page: "0", sort: "random" } }, recorded.response);
     expect(recorded.status).toBe(400);
   });
 

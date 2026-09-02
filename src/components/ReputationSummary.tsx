@@ -15,6 +15,8 @@ import {
   accountAgeInDays,
   type ReputationBadge,
 } from "@/lib/reputation/badges";
+import { useCreatorVerification } from "@/hooks/useCreatorVerification";
+import { VerifiedCreatorBadge } from "@/components/VerifiedCreatorBadge";
 
 interface ReputationResponse {
   accountCreatedAt: string | null;
@@ -108,6 +110,11 @@ export function ReputationSummary({ address }: { address: string }) {
     staleTime: 60_000,
   });
 
+  const verifiedLinks = reputationQuery.data?.verifiedLinks ?? [];
+  const { verification } = useCreatorVerification(address, {
+    externalVerified: verifiedLinks.length > 0,
+  });
+
   if (reputationQuery.isLoading) {
     return (
       <section
@@ -193,6 +200,7 @@ export function ReputationSummary({ address }: { address: string }) {
         </div>
         {badges.length > 0 && (
           <div className="flex w-full flex-wrap gap-2 sm:w-auto sm:justify-end">
+            <VerifiedCreatorBadge verification={verification} />
             {badges.map((badge) => {
               const Icon = BADGE_ICONS[badge.key];
               return (

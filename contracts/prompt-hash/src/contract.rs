@@ -95,6 +95,7 @@ impl PromptHashTrait for PromptHashContract {
         Storage::require_no_reentrancy(&env)?;
         ensure(!Storage::is_paused(&env), Error::ContractIsPaused)?;
         validate_prompt_fields(
+            &env,
             &image_url,
             &title,
             &category,
@@ -118,6 +119,15 @@ impl PromptHashTrait for PromptHashContract {
 
         // #50: validate revenue splits
         validate_splits(&env, &listing.splits)?;
+
+        // Deduplicate identical content hashes to discourage spam listings.
+        let prompt_count = Storage::get_prompt_counter(&env);
+        for prompt_id in 0..prompt_count {
+            let prompt = Storage::require_prompt(&env, prompt_id)?;
+            if prompt.content_hash == content_hash {
+                return Ok(prompt.id);
+            }
+        }
 
         // #131: default classification
         let classification = String::from_str(&env, "general");
@@ -209,7 +219,11 @@ impl PromptHashTrait for PromptHashContract {
         creator.require_auth();
         Storage::require_no_reentrancy(&env)?;
         ensure(!Storage::is_paused(&env), Error::ContractIsPaused)?;
-        ensure(price_stroops > 0, Error::InvalidPrice)?;
+        let min_price = Storage::get_min_price(&env).unwrap_or(0);
+        ensure(price_stroops > min_price, Error::InvalidPrice)?;
+        if let Some(max_price) = Storage::get_max_price(&env) {
+            ensure(price_stroops <= max_price, Error::InvalidPrice)?;
+        }
 
         let mut prompt = Storage::require_prompt(&env, prompt_id)?;
         ensure(prompt.creator == creator, Error::Unauthorized)?;
@@ -691,6 +705,10 @@ impl PromptHashTrait for PromptHashContract {
     ) -> Result<(), Error> {
         require_admin_multisig(&env, &approver_a, &approver_b)?;
         Storage::require_no_reentrancy(&env)?;
+        ensure!(
+            Storage::get_fee_wallet(&env).is_none(),
+            Error::FeeWalletAlreadySet
+        );
         Storage::set_fee_wallet(&env, &new_fee_wallet);
         Events::emit_fee_wallet_updated(&env, new_fee_wallet);
         Ok(())
@@ -706,6 +724,25 @@ impl PromptHashTrait for PromptHashContract {
 
     fn get_xlm_sac(env: Env) -> Option<Address> {
         Storage::get_xlm_address(&env)
+    }
+
+    fn set_price_bounds(
+        env: Env,
+        approver_a: Address,
+        approver_b: Address,
+        min_price: Option<i128>,
+        max_price: Option<i128>,
+    ) -> Result<(), Error> {
+        require_admin_multisig(&env, &approver_a, &approver_b)?;
+        Storage::require_no_reentrancy(&env)?;
+        Storage::set_min_price(&env, min_price);
+        Storage::set_max_price(&env, max_price);
+        Events::emit_price_bounds_set(&env, min_price, max_price);
+        Ok(())
+    }
+
+    fn get_price_bounds(env: Env) -> (Option<i128>, Option<i128>) {
+        (Storage::get_min_price(&env), Storage::get_max_price(&env))
     }
 
     fn set_pause_status(
@@ -2126,6 +2163,7 @@ fn validate_splits(env: &Env, splits: &Vec<Split>) -> Result<(), Error> {
 
 #[allow(clippy::too_many_arguments)]
 fn validate_prompt_fields(
+    env: &Env,
     image_url: &String,
     title: &String,
     category: &String,
@@ -2135,7 +2173,11 @@ fn validate_prompt_fields(
     wrapped_key: &String,
     price_stroops: i128,
 ) -> Result<(), Error> {
-    ensure(price_stroops > 0, Error::InvalidPrice)?;
+    let min_price = Storage::get_min_price(env).unwrap_or(0);
+    ensure(price_stroops > min_price, Error::InvalidPrice)?;
+    if let Some(max_price) = Storage::get_max_price(env) {
+        ensure(price_stroops <= max_price, Error::InvalidPrice)?;
+    }
     validate_len(image_url, MAX_IMAGE_URL_LEN, Error::InvalidFieldLength)?;
     validate_len(title, MAX_TITLE_LEN, Error::InvalidFieldLength)?;
     validate_len(category, MAX_CATEGORY_LEN, Error::InvalidFieldLength)?;
@@ -2150,6 +2192,13 @@ fn validate_prompt_fields(
     Ok(())
 }
 
+/// Validates a field is non-empty and fits within `max_len`.
+///
+/// `soroban_sdk::String::len()` counts **UTF-8 bytes**, not Unicode
+/// characters. Multi-byte input (e.g. emoji) therefore consumes more than one
+/// unit of the limit. The frontend mirrors this exact byte-counting in
+/// `src/lib/validation/listing.ts` (`utf8Length`) so the client never submits
+/// a field the contract will reject (#506).
 fn validate_len(value: &String, max_len: u32, error: Error) -> Result<(), Error> {
     ensure(!value.is_empty() && value.len() <= max_len, error)
 }

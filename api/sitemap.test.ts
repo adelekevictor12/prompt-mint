@@ -1,7 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const connectDbMock = vi.fn();
-const promptFindMock = vi.fn();
+const { connectDbMock, promptFindMock } = vi.hoisted(() => ({
+  connectDbMock: vi.fn(),
+  promptFindMock: vi.fn(),
+}));
 
 vi.mock("../src/lib/observability/wrapper", () => ({
   withObservability: (handler: unknown) => handler,

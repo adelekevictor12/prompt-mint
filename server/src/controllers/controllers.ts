@@ -1,4 +1,5 @@
 import { Request, Response } from "express";
+import { createHash } from "crypto";
 import connectDb from "../db/connectDb";
 import User from "../models/User";
 import Prompt from "../models/Prompt";
@@ -9,8 +10,10 @@ import {
   validateListingMetadata,
 } from "../services/listingValidation";
 import { cacheGet, cacheSet, CACHE_KEYS, PROMPT_METADATA_TTL_SECONDS, invalidatePromptMetadata } from "../services/cacheService";
+import { searchMarketplace, parseMarketplaceQuery } from "../services/marketplaceIndexService";
 import { getCircuitBreaker } from "../services/circuitBreaker";
 import { isValidAdminToken } from "../services/adminAuth";
+import { IndexerState } from "../models/IndexerState";
 import { AppError } from "../lib/AppError";
 import { asyncRoute } from "../lib/asyncRoute";
 import { recordAuditEvent } from "../services/auditTrail";
@@ -67,6 +70,25 @@ export const ImproveProxy = asyncRoute(async (req, res) => {
 
 /* PROMPTS CONTROLLERS */
 
+export function getStorageQuotaBytes(): number {
+  const configured = process.env.STORAGE_QUOTA_BYTES_PER_CREATOR;
+  if (configured && !isNaN(Number(configured))) {
+    return Number(configured);
+  }
+  return 50 * 1024 * 1024; // 50 MB default quota
+}
+
+export async function getUsedStorageBytes(userId: string | any): Promise<number> {
+  const prompts = await Prompt.find({ owner: userId }).select("content title image");
+  return prompts.reduce((total, p) => {
+    const contentBytes = Buffer.byteLength(p.content || "", "utf8");
+    const titleBytes = Buffer.byteLength(p.title || "", "utf8");
+    const imageBytes = Buffer.byteLength(p.image || "", "utf8");
+    return total + contentBytes + titleBytes + imageBytes;
+  }, 0);
+}
+
+
 export const CreatePrompt = asyncRoute(async (req, res) => {
   await connectDb();
 
@@ -107,6 +129,34 @@ export const CreatePrompt = asyncRoute(async (req, res) => {
     throw new AppError("User not found. Please connect your wallet first.", 404);
   }
 
+  const contentHash = createHash("sha256")
+    .update(normalized.content)
+    .digest("hex");
+
+  // Enforce storage quota per creator (Issue #198)
+  const incomingBytes =
+    Buffer.byteLength(normalized.content, "utf8") +
+    Buffer.byteLength(normalized.title, "utf8") +
+    Buffer.byteLength(normalized.image, "utf8");
+  const usedBytes = await getUsedStorageBytes(user._id);
+  const quotaBytes = getStorageQuotaBytes();
+  if (usedBytes + incomingBytes > quotaBytes) {
+    throw new AppError(
+      "Storage quota exceeded for this creator. Remove or upgrade older prompts to free space.",
+      413,
+      "STORAGE_QUOTA_EXCEEDED",
+    );
+  }
+
+  const duplicatePrompt = await Prompt.findOne({ contentHash });
+  if (duplicatePrompt) {
+    throw new AppError(
+      "A prompt with identical content already exists.",
+      409,
+      "DUPLICATE_CONTENT",
+    );
+  }
+
   const newPrompt = new Prompt({
     image: normalized.image,
     title: normalized.title,
@@ -114,6 +164,7 @@ export const CreatePrompt = asyncRoute(async (req, res) => {
     owner: user._id,
     price: normalized.price,
     category: normalized.category,
+    contentHash,
     rating: 3,
   });
 
@@ -138,36 +189,35 @@ export const GetPrompts = asyncRoute(async (req, res) => {
   await connectDb();
 
   const { searchParams } = new URL(req.url);
-  const category = searchParams.get("category");
-  const walletAddress = searchParams.get("walletAddress");
 
-  // Build a deterministic cache key from the query params
-  const cacheKey = CACHE_KEYS.promptList(`cat=${category ?? ""}&wallet=${walletAddress ?? ""}`);
-  const cached = await cacheGet(cacheKey);
-  if (cached) return res.json(JSON.parse(cached));
+  // Delegate browse/search/pagination to the indexer-backed read model, which
+  // serves the marketplace list from the event-indexed collection with
+  // cache-aside so high-volume traffic stays off the database.
+  const page = await searchMarketplace(parseMarketplaceQuery(searchParams));
 
-  const query: any = { listingStatus: 'published', isActive: true };
+  res.json(page);
+});
 
-  if (category) {
-    query.category = category;
-  }
+/**
+ * Surface the external indexer's progress and indexed collection size. Lets
+ * clients/operators see how fresh the search/pagination read model is without
+ * probing the chain directly.
+ */
+export const GetMarketplaceIndexStatus = asyncRoute(async (_req, res) => {
+  await connectDb();
 
-  if (walletAddress) {
-    const user = await User.findOne({
-      walletAddress: walletAddress.toLowerCase(),
-    });
-    if (user) {
-      query.owner = user._id;
-    }
-  }
+  const state = await IndexerState.findOne({ key: "prompt_hash_contract" }).lean();
+  const [indexed, published] = await Promise.all([
+    Prompt.countDocuments({ onChainId: { $ne: null } }),
+    Prompt.countDocuments({ listingStatus: "published", isActive: true }),
+  ]);
 
-  const prompts = await Prompt.find(query)
-    .populate("owner", "username walletAddress")
-    .sort({ createdAt: -1 });
-
-  await cacheSet(cacheKey, JSON.stringify(prompts), PROMPT_METADATA_TTL_SECONDS);
-
-  res.json(prompts);
+  res.json({
+    lastIndexedLedger: state?.lastIndexedLedger ?? 0,
+    indexedCount: indexed,
+    publishedCount: published,
+    updatedAt: state?.updatedAt ?? null,
+  });
 });
 
 export const GetPromptDetail = asyncRoute(async (req, res) => {
@@ -721,5 +771,34 @@ export const UpdateUserPreferences = asyncRoute(async (req, res) => {
   res.status(200).json({
     message: "Preferences updated successfully",
     preferences: user.notificationPreferences,
+  });
+});
+
+export const GetCreatorStorageQuota = asyncRoute(async (req, res) => {
+  await connectDb();
+  const { walletAddress } = req.params;
+  if (!walletAddress) {
+    throw new AppError("Wallet address is required", 400, "MISSING_WALLET");
+  }
+
+  const user = await User.findOne({
+    walletAddress: walletAddress.toLowerCase(),
+  });
+
+  if (!user) {
+    throw new AppError("User not found", 404, "USER_NOT_FOUND");
+  }
+
+  const usedBytes = await getUsedStorageBytes(user._id);
+  const quotaBytes = getStorageQuotaBytes();
+  const remainingBytes = Math.max(0, quotaBytes - usedBytes);
+  const usagePercentage = Math.min(100, Math.round((usedBytes / quotaBytes) * 100));
+
+  res.status(200).json({
+    walletAddress,
+    usedBytes,
+    quotaBytes,
+    remainingBytes,
+    usagePercentage,
   });
 });

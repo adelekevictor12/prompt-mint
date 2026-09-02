@@ -17,6 +17,7 @@ import DisplayWallet from "./DisplayWallet";
 import { ThemeToggle } from "./ThemeToggle";
 import { CurrencyToggle } from "./CurrencyToggle";
 import { NotificationCenter } from "./NotificationCenter";
+import { InstallAppButton } from "./InstallAppButton";
 import { useCart } from "@/providers/CartProvider";
 import { Cart, CartIcon } from "./Cart";
 import { Checkout } from "./Checkout";
@@ -156,6 +157,7 @@ export function Navigation() {
             </Button>
             <NotificationCenter />
             <ThemeToggle />
+            <InstallAppButton />
             <DisplayWallet />
           </div>
 
@@ -175,6 +177,7 @@ export function Navigation() {
               )}
             </Button>
             <DisplayWallet />
+            <InstallAppButton />
             <Sheet open={menuOpen} onOpenChange={setMenuOpen}>
               <SheetTrigger asChild>
                 <Button
@@ -212,6 +215,7 @@ export function Navigation() {
                   <div className="flex items-center gap-2 border-t border-white/10 pt-4 mt-4">
                     <CurrencyToggle />
                     <ThemeToggle />
+                    <InstallAppButton variant="full" />
                   </div>
                 </div>
               </SheetContent>

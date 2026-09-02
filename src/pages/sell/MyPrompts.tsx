@@ -211,6 +211,10 @@ const MyPrompts = ({ onCreateNew: _onCreateNew }: MyPromptsProps) => {
       queryClient.invalidateQueries({ queryKey: ["purchased-prompts"] }),
       queryClient.invalidateQueries({ queryKey: ["marketplace-prompts"] }),
       queryClient.invalidateQueries({ queryKey: ["prompt-access"] }),
+      // #507: detail views and the cart cache read price from separate keys and
+      // must be refreshed too, otherwise the old price lingers after an update.
+      queryClient.invalidateQueries({ queryKey: ["prompt-detail"] }),
+      queryClient.invalidateQueries({ queryKey: ["marketplace-prompts-cache"] }),
     ]);
   };
 

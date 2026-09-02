@@ -16,10 +16,6 @@ describe("ErrorBoundary", () => {
     consoleSpy.mockClear();
   });
 
-  afterEach(() => {
-    consoleSpy.mockClear();
-  });
-
   it("renders children when no error", () => {
     render(
       <ErrorBoundary>
@@ -50,19 +46,22 @@ describe("ErrorBoundary", () => {
 
   it("shows route name in error message when provided", () => {
     render(
-      <ErrorBoundary routeName="Browse">
+      <ErrorBoundary routeName="Browse" reportPath="/browse">
         <ThrowingComponent shouldThrow={true} />
       </ErrorBoundary>,
     );
     expect(
       screen.getByText(/in Browse/),
     ).toBeInTheDocument();
+    expect(screen.getByText("Path: /browse")).toBeInTheDocument();
   });
 
   it("calls onError when child throws", () => {
     const onError = vi.fn();
+    vi.spyOn(console, "error").mockImplementation(() => {});
+
     render(
-      <ErrorBoundary onError={onError}>
+      <ErrorBoundary onError={onError} reportPath="/profile">
         <ThrowingComponent shouldThrow={true} />
       </ErrorBoundary>,
     );

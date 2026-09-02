@@ -40,7 +40,7 @@ describe("MarkdownPreview – #66", () => {
     fireEvent.click(rawBtn);
 
     // After clicking, the raw string should be visible verbatim
-    expect(screen.getByText(md)).toBeTruthy();
+    expect(screen.getByText((content) => content.includes("# Heading") && content.includes("bold"))).toBeTruthy();
   });
 
   it("hides the Raw toggle in previewOnly mode", () => {

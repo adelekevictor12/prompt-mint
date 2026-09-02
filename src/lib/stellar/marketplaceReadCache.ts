@@ -65,10 +65,13 @@ export function writeMarketplaceReadCache(
   try {
     storage.setItem(
       MARKETPLACE_CACHE_STORAGE_KEY,
-      JSON.stringify({
-        timestamp: Date.now(),
-        prompts,
-      } satisfies MarketplaceReadCacheEntry),
+      JSON.stringify(
+        {
+          timestamp: Date.now(),
+          prompts,
+        } satisfies MarketplaceReadCacheEntry,
+        (_key, value) => (typeof value === "bigint" ? value.toString() : value),
+      ),
     );
   } catch {
     // Ignore storage write failures so the marketplace read can continue.

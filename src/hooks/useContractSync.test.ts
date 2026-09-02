@@ -20,6 +20,8 @@ const EXPECTED_KEYS = [
   ["purchased-prompts"],
   ["saved-prompts"],
   ["prompt-access"],
+  ["prompt-detail"],
+  ["marketplace-prompts-cache"],
 ];
 
 describe("invalidateAllPromptQueries", () => {
@@ -27,7 +29,7 @@ describe("invalidateAllPromptQueries", () => {
     const queryClient = mockQueryClient();
     await invalidateAllPromptQueries(queryClient);
 
-    expect(queryClient.invalidateQueries).toHaveBeenCalledTimes(5);
+    expect(queryClient.invalidateQueries).toHaveBeenCalledTimes(7);
     for (const queryKey of EXPECTED_KEYS) {
       expect(queryClient.invalidateQueries).toHaveBeenCalledWith({ queryKey });
     }
@@ -78,6 +80,24 @@ describe("invalidateAllPromptQueries", () => {
     });
   });
 
+  it("includes prompt-detail so detail modals / prompt pages show the fresh price (#507)", async () => {
+    const queryClient = mockQueryClient();
+    await invalidateAllPromptQueries(queryClient);
+
+    expect(queryClient.invalidateQueries).toHaveBeenCalledWith({
+      queryKey: ["prompt-detail"],
+    });
+  });
+
+  it("includes marketplace-prompts-cache so cart pricing refreshes after a price update (#507)", async () => {
+    const queryClient = mockQueryClient();
+    await invalidateAllPromptQueries(queryClient);
+
+    expect(queryClient.invalidateQueries).toHaveBeenCalledWith({
+      queryKey: ["marketplace-prompts-cache"],
+    });
+  });
+
   it("awaits all invalidations in parallel before resolving", async () => {
     const settled: string[] = [];
     const queryClient = {
@@ -94,12 +114,14 @@ describe("invalidateAllPromptQueries", () => {
 
     await invalidateAllPromptQueries(queryClient);
 
-    expect(settled).toHaveLength(5);
+    expect(settled).toHaveLength(7);
     expect(settled).toContain("marketplace-prompts");
     expect(settled).toContain("created-prompts");
     expect(settled).toContain("purchased-prompts");
     expect(settled).toContain("saved-prompts");
     expect(settled).toContain("prompt-access");
+    expect(settled).toContain("prompt-detail");
+    expect(settled).toContain("marketplace-prompts-cache");
   });
 
   it("can be called multiple times without error", async () => {
@@ -107,6 +129,6 @@ describe("invalidateAllPromptQueries", () => {
     await invalidateAllPromptQueries(queryClient);
     await invalidateAllPromptQueries(queryClient);
 
-    expect(queryClient.invalidateQueries).toHaveBeenCalledTimes(10);
+    expect(queryClient.invalidateQueries).toHaveBeenCalledTimes(14);
   });
 });

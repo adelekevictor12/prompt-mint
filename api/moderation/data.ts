@@ -1,14 +1,193 @@
-import { buildModeratorAuthMessage, verifyChallengeSignature } from "../../src/lib/auth/challenge";
+import {
+  buildModeratorAuthMessage,
+  verifyChallengeSignature,
+} from "../../src/lib/auth/challenge";
+
+export type ModerationAction =
+  | "review_removed"
+  | "review_approved"
+  | "user_warned"
+  | "report_resolved"
+  | "report_dismissed"
+  | "prompt_takedown"
+  | "prompt_reinstated";
+
+export type ModerationTargetType = "review" | "user" | "report" | "prompt";
 
 export interface ModerationLogEntry {
   id: string;
-  action: "review_removed" | "review_approved" | "user_warned";
+  action: ModerationAction;
   moderatorAddress: string;
   targetId: string;
-  targetType: "review" | "user";
+  targetType: ModerationTargetType;
   reason: string;
   details?: string;
   createdAt: number;
+}
+
+// ── Abuse reports ─────────────────────────────────────────────────────────────
+
+export type ReportTargetType = "prompt" | "review" | "user";
+export type ReportStatus = "pending" | "under_review" | "resolved" | "dismissed";
+export type ReportReason =
+  | "copyright"
+  | "spam"
+  | "inappropriate"
+  | "scam"
+  | "misinformation"
+  | "other";
+
+export interface AbuseReport {
+  id: string;
+  reporterAddress: string;
+  targetType: ReportTargetType;
+  targetId: string;
+  reason: ReportReason;
+  details?: string;
+  status: ReportStatus;
+  createdAt: number;
+  updatedAt: number;
+  resolvedBy?: string;
+  resolution?: string;
+}
+
+const reports: AbuseReport[] = [];
+
+export const REPORT_REASONS: ReportReason[] = [
+  "copyright",
+  "spam",
+  "inappropriate",
+  "scam",
+  "misinformation",
+  "other",
+];
+
+function generateId(prefix: string): string {
+  return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+export function addReport(
+  entry: Omit<AbuseReport, "id" | "createdAt" | "updatedAt" | "status">,
+): AbuseReport {
+  const now = Date.now();
+  const stored: AbuseReport = {
+    ...entry,
+    id: generateId("rep"),
+    status: "pending",
+    createdAt: now,
+    updatedAt: now,
+  };
+  reports.push(stored);
+  return stored;
+}
+
+export function getReportById(id: string): AbuseReport | undefined {
+  return reports.find((report) => report.id === id);
+}
+
+export interface ReportQuery {
+  status?: ReportStatus;
+  targetType?: ReportTargetType;
+  reason?: ReportReason;
+  reporterAddress?: string;
+  search?: string;
+  since?: number;
+}
+
+export function getReports(query: ReportQuery = {}): AbuseReport[] {
+  let filtered = [...reports];
+  if (query.status) filtered = filtered.filter((r) => r.status === query.status);
+  if (query.targetType) filtered = filtered.filter((r) => r.targetType === query.targetType);
+  if (query.reason) filtered = filtered.filter((r) => r.reason === query.reason);
+  if (query.reporterAddress)
+    filtered = filtered.filter(
+      (r) => r.reporterAddress.toLowerCase() === query.reporterAddress!.toLowerCase(),
+    );
+  if (query.since) filtered = filtered.filter((r) => r.createdAt >= query.since!);
+  if (query.search) {
+    const needle = query.search.toLowerCase();
+    filtered = filtered.filter(
+      (r) =>
+        r.targetId.toLowerCase().includes(needle) ||
+        r.details?.toLowerCase().includes(needle) ||
+        r.reporterAddress.toLowerCase().includes(needle),
+    );
+  }
+  filtered.sort((a, b) => b.createdAt - a.createdAt);
+  return filtered;
+}
+
+export function hasOpenReport(
+  reporterAddress: string,
+  targetType: ReportTargetType,
+  targetId: string,
+): boolean {
+  return reports.some(
+    (r) =>
+      r.reporterAddress.toLowerCase() === reporterAddress.toLowerCase() &&
+      r.targetType === targetType &&
+      r.targetId === targetId &&
+      r.status !== "resolved" &&
+      r.status !== "dismissed",
+  );
+}
+
+export function updateReportStatus(
+  id: string,
+  status: ReportStatus,
+  options: { resolvedBy?: string; resolution?: string; now?: number } = {},
+): AbuseReport | undefined {
+  const report = getReportById(id);
+  if (!report) return undefined;
+  report.status = status;
+  report.updatedAt = options.now ?? Date.now();
+  if (options.resolvedBy) report.resolvedBy = options.resolvedBy;
+  if (options.resolution) report.resolution = options.resolution;
+  return report;
+}
+
+// ── Prompt takedown state ────────────────────────────────────────────────────
+
+export type PromptModerationStatus = "active" | "taken_down";
+
+export interface PromptModerationState {
+  promptId: string;
+  status: PromptModerationStatus;
+  reason?: string;
+  updatedAt: number;
+  updatedBy?: string;
+}
+
+const promptStates = new Map<string, PromptModerationState>();
+
+export function getPromptModerationState(promptId: string): PromptModerationState {
+  return (
+    promptStates.get(promptId) ?? {
+      promptId,
+      status: "active",
+      updatedAt: 0,
+    }
+  );
+}
+
+export function setPromptModerationState(
+  promptId: string,
+  status: PromptModerationStatus,
+  options: { reason?: string; updatedBy?: string; now?: number } = {},
+): PromptModerationState {
+  const state: PromptModerationState = {
+    promptId,
+    status,
+    reason: options.reason,
+    updatedAt: options.now ?? Date.now(),
+    updatedBy: options.updatedBy,
+  };
+  promptStates.set(promptId, state);
+  return state;
+}
+
+export function isPromptTakenDown(promptId: string): boolean {
+  return getPromptModerationState(promptId).status === "taken_down";
 }
 
 const logs: ModerationLogEntry[] = [];

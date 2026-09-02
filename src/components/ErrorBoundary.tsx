@@ -1,6 +1,7 @@
 import { Component, type ReactNode, type ErrorInfo } from "react";
 import { AlertTriangle, RefreshCw, Home } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { reportRouteError } from "@/lib/observability/reportRouteError";
 
 interface ErrorBoundaryProps {
   children: ReactNode;
@@ -9,6 +10,8 @@ interface ErrorBoundaryProps {
   onError?: (error: Error, errorInfo: ErrorInfo) => void;
   className?: string;
   routeName?: string;
+  /** Current URL pathname for user-facing fallback and error reports. */
+  reportPath?: string;
 }
 
 interface ErrorBoundaryState {
@@ -34,13 +37,12 @@ export class ErrorBoundary extends Component<
     this.setState({ errorInfo });
     this.props.onError?.(error, errorInfo);
 
-    if (import.meta.env.DEV) {
-      console.error(
-        `[ErrorBoundary${this.props.routeName ? ` (${this.props.routeName})` : ""}]`,
-        error,
-        errorInfo,
-      );
-    }
+    reportRouteError({
+      routeName: this.props.routeName,
+      reportPath: this.props.reportPath ?? window.location.pathname,
+      error,
+      errorInfo,
+    });
   }
 
   handleReset = () => {
@@ -81,6 +83,12 @@ export class ErrorBoundary extends Component<
             {this.props.routeName ? ` in ${this.props.routeName}` : ""}. You can
             try refreshing this section or return to the home page.
           </p>
+
+          {(this.props.reportPath ?? window.location.pathname) && (
+            <p className="text-slate-500 text-xs font-mono mb-2">
+              Path: {this.props.reportPath ?? window.location.pathname}
+            </p>
+          )}
 
           {import.meta.env.DEV && this.state.error && (
             <details className="w-full max-w-lg mt-4 text-left">
